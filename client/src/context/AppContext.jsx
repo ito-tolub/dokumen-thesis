@@ -22,6 +22,7 @@ export const AppContextProvider = (props) => {
     const [isEducator, setIsEducator] = useState(false)
     const [enrolledCourses, setEnrolledCourses] = useState([])
     const [userData, setUserData] = useState(null)
+    const [userLoading, setUserLoading] = useState(true)
 
     //fetch all courses
     const fetchAllCourses = async () => {
@@ -50,7 +51,7 @@ export const AppContextProvider = (props) => {
 
             if (data.success) {
                 setUserData(data.user)
-
+                setUserLoading(false)
                 const isVarkPage = window.location.pathname === '/vark-quiz'
                 const isNppPage = window.location.pathname === '/npp-input'
 
@@ -63,14 +64,16 @@ export const AppContextProvider = (props) => {
 
                 // Cek VARK
                 const vark = data.user?.varkResult
-                const belumIsi = !vark || !vark.dominant || vark.dominant === ''
+                const belumIsi = !vark || !vark.dominant || vark.dominant.length === 0
                 if (belumIsi && !isVarkPage && !isNppPage) {
                     navigate('/vark-quiz')
                 }
             } else {
+                setUserLoading(false)
                 toast.error(data.message)
             }
         } catch (error) {
+            setUserLoading(false) 
             toast.error(error.message)
         }
     }
@@ -141,6 +144,8 @@ export const AppContextProvider = (props) => {
         if (user) {
             fetchUserData()
             fetUserEnrolledCourses()
+        } else {
+            setUserLoading(false)
         }
     }, [user])
 

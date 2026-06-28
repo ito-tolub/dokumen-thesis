@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema(
         name: {type: String, required: true},
         email: {type: String, required: true, unique: true},
         imageUrl: {type: String, required: true},
-        npp: { type: Number, default: null, sparse: true, unique: true },
+        npp: { type: String, default: null, sparse: true, unique: true },
         
         enrolledCourses: [
             {
@@ -21,7 +21,7 @@ const userSchema = new mongoose.Schema(
                 R: { type: Number, default: 0 },
                 K: { type: Number, default: 0 },
             },
-            dominant: { type: String, default: '' },
+            dominant: { type: [String], default: [] },
         },
     }, {timestamps: true});
 

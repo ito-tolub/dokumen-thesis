@@ -1,8 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
 
 @import "tailwindcss";
+@theme {
+  --font-sans: 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
 :root {
-  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
   line-height: 1.5;
   font-weight: 400;
   color: #0f172a;
@@ -14,7 +17,7 @@
 }
 
 * {
-  font-family: outfit;
+  font-family: var(--font-sans);
 }
 @layer base{
   html {

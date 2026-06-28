@@ -6,6 +6,7 @@ import Course from "../models/Course.js";
 import mongoose from "mongoose";
 import { CourseProgress } from "../models/CourseProgress.js";
 import Pegawai from "../models/pegawai.js";
+import { clerkClient } from "@clerk/express";
 
 export const updateCourseProgress = async (req, res) => {
   try {
@@ -42,10 +43,23 @@ export const updateCourseProgress = async (req, res) => {
 export const getUserData = async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const user = await User.findById(userId).lean();
+    let user = await User.findById(userId).lean();
 
+    // Akun baru: buat record dari data Clerk bila webhook belum membuatnya
+    // (penting di localhost, karena webhook Clerk tidak menjangkau localhost).
     if (!user) {
-      return res.json({ success: false, message: "User not found" });
+      const clerkUser = await clerkClient.users.getUser(userId);
+      const created = await User.create({
+        _id: userId,
+        name:
+          `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() ||
+          "Praja",
+        email:
+          clerkUser.emailAddresses?.[0]?.emailAddress ||
+          `${userId}@noemail.local`,
+        imageUrl: clerkUser.imageUrl || "",
+      });
+      user = created.toObject();
     }
 
     let keprajaan = null;
@@ -55,14 +69,6 @@ export const getUserData = async (req, res) => {
         allKeprajaan.find((k) => k.npp.toString() === user.npp.toString()) ||
         null;
     }
-
-    console.log("keprajaan found:", keprajaan); // ← tambah ini sementara
-    console.log("DEBUG npp →", {
-      userNpp: user.npp,
-      userNppType: typeof user.npp,
-      totalKeprajaan: (await Keprajaan.find({}).lean()).length,
-      matched: keprajaan?.nama ?? "TIDAK KETEMU",
-    });
 
     const userWithKeprajaan = {
       ...user,

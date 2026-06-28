@@ -1,61 +1,404 @@
-import React from 'react'
+import React, { useState, useContext, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import axios from "axios";
+import { AppContext } from "../../context/AppContext";
 
-const Ico = ({ name, size = 16, className = '', style = {} }) => (
-  <i className={`ti ti-${name} ${className}`} aria-hidden="true" style={{ fontSize: size, ...style }} />
-)
-
-const DEFAULT_COURSE = {
-  id: 1,
-  title: 'Manajemen Proyek Sistem Informasi Pemerintahan (G2)',
-  prog: 'Teknologi Rekayasa Informasi Pemerintahan',
-  inst: 'MUHAMMAD TOSAN BINGAMAWA, M.Kom',
-  participants: 25,
-  sched: 'Senin, 08:00 – 09:40',
-  att: 15,
-  total: 16,
-}
+const Ico = ({ name, size = 16, className = "", style = {} }) => (
+  <i
+    className={`ti ti-${name} ${className}`}
+    aria-hidden="true"
+    style={{ fontSize: size, ...style }}
+  />
+);
 
 const MENU_ITEMS = [
-  'Informasi Kelas',
-  'Diskusi',
-  'Sesi Pembelajaran',
-  'Tugas',
-  'Ujian CBT',
-  'Kuis',
-  'Berkas',
-  'Pengajar & Peserta',
-  'Kelompok',
-  'Student Engagement Score (SES)',
-]
+  "Informasi Kelas",
+  "Diskusi",
+  "Sesi Pembelajaran",
+  "Tugas",
+  "Ujian CBT",
+  "Kuis",
+  "Berkas",
+  "Pengajar & Peserta",
+  "Kelompok",
+  "Student Engagement Score (SES)",
+];
 
-const stripClassFromTitle = (title = '') => title.replace(/\s*\([^)]*\)\s*$/g, '').trim()
-const getClassCode = (title = '') => title.match(/\(([^)]+)\)/)?.[1] || 'G2'
+// ⚠️ Data contoh — belum ada di skema. Ganti dengan realCourse.tugas saat field-nya dibuat.
+const DEMO_TUGAS = [
+  {
+    title: "Ujian Akhir Semester UAS",
+    status: "Closed",
+    sesi: 16,
+    deadline: "2025-12-13T23:59",
+    submitted: true,
+  },
+  {
+    title: "Tugas Mandiri I - Analisis Proyek TI di Pemerintahan",
+    status: "Closed",
+    sesi: 2,
+    deadline: "2025-10-05T23:59",
+    submitted: true,
+  },
+];
+
+const fmtTanggalJam = (val) => {
+  const d = new Date(val);
+  if (isNaN(d)) return val;
+  const jam = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return `${fmtTanggal(d)}, ${jam}`; // fmtTanggal sudah didefinisikan utk sesi
+};
+
+const TugasCard = ({ t }) => (
+  <article className="cd-tugas-card">
+    <h3 className="cd-tugas-title">
+      {t.title}
+      <span
+        className={`cd-tugas-badge ${t.status === "Closed" ? "closed" : "open"}`}
+      >
+        {t.status}
+      </span>
+    </h3>
+    <p className="cd-tugas-sesi">Sesi ke {t.sesi}</p>
+    <div className="cd-tugas-foot">
+      <div>
+        <p className="cd-tugas-label">Batas waktu penyerahan</p>
+        <p className="cd-tugas-deadline">{fmtTanggalJam(t.deadline)}</p>
+      </div>
+      <button
+        type="button"
+        className={`cd-tugas-btn ${t.submitted ? "" : "pending"}`}
+      >
+        {t.submitted ? "Sudah Dikumpulkan" : "Belum Dikumpulkan"}
+      </button>
+    </div>
+  </article>
+);
+
+const TugasPanel = ({ items = [] }) => (
+  <section className="cd-tugas-list">
+    {items.length === 0 ? (
+      <div className="cd-side-card empty-task">Belum ada tugas.</div>
+    ) : (
+      items.map((t, i) => <TugasCard key={i} t={t} />)
+    )}
+  </section>
+);
+
+const SEMESTER_START = "2025-08-07"; // sesuaikan; dipakai untuk menurunkan tanggal tiap sesi
+
+const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const BULAN = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+];
+const HARI_INDEX = {
+  Minggu: 0,
+  Senin: 1,
+  Selasa: 2,
+  Rabu: 3,
+  Kamis: 4,
+  Jumat: 5,
+  Sabtu: 6,
+};
+
+const fmtTanggal = (d) =>
+  `${HARI[d.getDay()]} ${d.getDate()} ${BULAN[d.getMonth()]} ${d.getFullYear()}`;
+
+// Tanggal sesi ke-n = kemunculan pertama schedule.day pada/ setelah SEMESTER_START, lalu +(n-1) minggu
+const tanggalSesi = (scheduleDay, order) => {
+  const start = new Date(SEMESTER_START);
+  const target = HARI_INDEX[scheduleDay] ?? start.getDay();
+  const first = new Date(start);
+  first.setDate(
+    start.getDate() + ((target - start.getDay() + 7) % 7) + (order - 1) * 7,
+  );
+  return first;
+};
+
+const statusSesi = (tgl) => {
+  if (!tgl) return "Selesai";
+  const now = new Date();
+  const awal = new Date(tgl);
+  awal.setHours(0, 0, 0, 0);
+  const akhir = new Date(tgl);
+  akhir.setHours(23, 59, 59, 999);
+  if (akhir < now) return "Selesai";
+  if (awal <= now && now <= akhir) return "Berlangsung";
+  return "Belum dimulai";
+};
+
+// Membangun array sesi dari course asli (courseContent + schedule)
+const buildSessions = (course) => {
+  const content = course?.courseContent || [];
+  const schedule = course?.schedule || {};
+  const lecturer =
+    course?.pengajarNama || course?.pengajar?.nama || course?.inst || "—";
+
+  return content
+    .map((ch, rawIndex) => ({ ch, rawIndex }))
+    .sort((a, b) => (a.ch.chapterOrder || 0) - (b.ch.chapterOrder || 0))
+    .map(({ ch, rawIndex }) => {
+      const tgl = schedule.day
+        ? tanggalSesi(schedule.day, ch.chapterOrder)
+        : null;
+      return {
+        rawIndex,
+        order: ch.chapterOrder,
+        title: (ch.chapterTitle || "").replace(
+          `Pertemuan ${ch.chapterOrder} - `,
+          "",
+        ),
+        status: statusSesi(tgl),
+        tanggal: tgl,
+        waktu:
+          schedule.startTime && schedule.endTime
+            ? `${schedule.startTime} - ${schedule.endTime}`
+            : null,
+        ruang: course?.ruang || null, // ⚠️ belum ada di schema → tampil hanya jika ada
+        lecturer,
+        materiCount: (ch.chapterContent || []).length,
+        tugasCount: ch.tugasCount ?? null, // ⚠️ belum ada di schema → tampil hanya jika ada
+      };
+    });
+};
+
+const SessionCard = ({ s, onOpen }) => (
+  <article className="cd-session-card">
+    <div className="cd-session-top">
+      <span className="cd-session-pill">
+        Sesi ke {s.order} <Ico name="cloud" size={13} />
+      </span>
+      <span
+        className={`cd-session-status ${s.status === "Selesai" ? "done" : s.status === "Berlangsung" ? "live" : "soon"}`}
+      >
+        {s.status}
+      </span>
+    </div>
+
+    <h3 className="cd-session-title">{s.title}</h3>
+
+    {s.tanggal && (
+      <p className="cd-session-meta">
+        {fmtTanggal(s.tanggal)}
+        {s.waktu ? ` ${s.waktu}` : ""}
+      </p>
+    )}
+    {s.ruang && <p className="cd-session-meta">Ruang: {s.ruang}</p>}
+
+    <p className="cd-session-meta">Dosen Pengajar:</p>
+    <ul className="cd-session-lecturer">
+      <li>{s.lecturer}</li>
+    </ul>
+
+    <div className="cd-session-footer">
+      <span>
+        <Ico name="file-text" size={15} /> {s.materiCount} Materi
+      </span>
+      {s.tugasCount != null && (
+        <span>
+          <Ico name="clipboard-text" size={15} /> {s.tugasCount} Tugas
+        </span>
+      )}
+    </div>
+    <button
+      type="button"
+      onClick={onOpen}
+      style={{
+        marginTop: 12,
+        width: "100%",
+        padding: "9px 14px",
+        background: "#16a34a",
+        color: "#fff",
+        border: "none",
+        borderRadius: 8,
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+      }}
+    >
+      Masuk ke Sesi <Ico name="arrow-right" size={15} />
+    </button>
+  </article>
+);
+
+const TujuanUmum = ({ teks }) => (
+  <section className="cd-tiu-card">
+    <h4>Tujuan Instruksional Umum</h4>
+    <p className={teks ? "cd-tiu-text" : "cd-muted"}>
+      {teks || "Tidak ada catatan"}
+    </p>
+  </section>
+);
+
+const PustakaPanel = ({ items = [] }) => (
+  <section className="cd-panel">
+    {items.length === 0 ? (
+      <div className="cd-side-card empty-task">Belum ada pustaka.</div>
+    ) : (
+      <ul className="cd-pustaka-list">
+        {items.map((p, i) => (
+          <li key={i} className="cd-pustaka-item">
+            <span className="cd-file-badge">{p.type || "REF"}</span>
+            <div>
+              <p className="cd-pustaka-title">{p.title}</p>
+              {p.author && <small className="cd-muted">{p.author}</small>}
+            </div>
+            {p.url && (
+              <a
+                className="cd-pustaka-link"
+                href={p.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Ico name="external-link" size={15} />
+              </a>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+);
+
+const VirtualLabPanel = ({ items = [] }) => (
+  <section className="cd-panel">
+    {items.length === 0 ? (
+      <div className="cd-side-card empty-task">Belum ada virtual lab.</div>
+    ) : (
+      <div className="cd-lab-grid">
+        {items.map((l, i) => (
+          <a
+            key={i}
+            className="cd-lab-card"
+            href={l.url || "#"}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <div className="cd-lab-icon">
+              <Ico name="flask" size={22} />
+            </div>
+            <div>
+              <p className="cd-lab-title">{l.title}</p>
+              {l.desc && <small className="cd-muted">{l.desc}</small>}
+            </div>
+          </a>
+        ))}
+      </div>
+    )}
+  </section>
+);
+
+const RpsTabs = ({ sessions, course }) => {
+  const navigate = useNavigate();
+  const [tab, setTab] = useState("rps");
+
+  const TABS = [
+    { id: "rps", label: "Rencana Pembelajaran Semester (RPS)" },
+    { id: "pustaka", label: "Pustaka" },
+    { id: "lab", label: "Virtual Lab" },
+  ];
+  const pustaka = course?.pustaka || [];
+  const labs = course?.virtualLab || [];
+
+  return (
+    
+    <section className="cd-session-list">
+      <div className="cd-tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={`cd-tab ${tab === t.id ? "active" : ""}`}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "rps" && (
+        <>
+          <TujuanUmum />
+          <div className="cd-session-subhead">
+            <span className="cd-session-count">
+              Total {sessions.length} Sesi
+            </span>
+          </div>
+          {sessions.length === 0 ? (
+            <div className="cd-side-card empty-task">
+              Belum ada sesi pembelajaran.
+            </div>
+          ) : (
+            sessions.map((s) => (
+              <SessionCard
+                key={s.rawIndex}
+                s={s}
+                onOpen={() => {
+                  if (!course?._id) return;
+                  navigate(`/player/${course._id}?sesi=${s.rawIndex}`);
+                }}
+              />
+            ))
+          )}
+        </>
+      )}
+
+      {tab === "pustaka" && <PustakaPanel items={pustaka} />}
+      {tab === "lab" && <VirtualLabPanel items={labs} />}
+    </section>
+  );
+};
+
+const stripClassFromTitle = (title = "") =>
+  title.replace(/\s*\([^)]*\)\s*$/g, "").trim();
+const getClassCode = (title = "") => title.match(/\(([^)]+)\)/)?.[1] || "G2";
 
 const ActionShortcut = ({ icon, label, color }) => (
   <button className="cd-shortcut" type="button">
-    <span className="cd-shortcut-icon" style={{ background: color.bg, color: color.text }}>
+    <span
+      className="cd-shortcut-icon"
+      style={{ background: color.bg, color: color.text }}
+    >
       <Ico name={icon} size={24} />
     </span>
     <span>{label}</span>
   </button>
-)
+);
 
-const Sidebar = ({ onBack }) => (
+const Sidebar = ({ onBack, active, onSelect }) => (
   <aside className="cd-sidebar">
     <button className="cd-back" type="button" onClick={onBack}>
-      <Ico name="arrow-left" size={16} />
-      Kembali
+      <Ico name="arrow-left" size={16} /> Kembali
     </button>
-
     <nav className="cd-menu" aria-label="Menu kelas">
       {MENU_ITEMS.map((item) => (
-        <button key={item} className={`cd-menu-item ${item === 'Diskusi' ? 'active' : ''}`} type="button">
+        <button
+          key={item}
+          className={`cd-menu-item ${item === active ? "active" : ""}`}
+          type="button"
+          onClick={() => onSelect(item)}
+        >
           {item}
         </button>
       ))}
     </nav>
   </aside>
-)
+);
 
 const AssignmentCard = () => (
   <article className="cd-assignment-card">
@@ -72,7 +415,8 @@ const AssignmentCard = () => (
           <span className="cd-submitted">Sudah Dikumpulkan</span>
         </div>
         <p className="cd-assignment-desc">
-          Anda dapat mengacu pada materi perkuliahan sesi ke 9 yang sudah saya upload. Selamat mengerjakan.
+          Anda dapat mengacu pada materi perkuliahan sesi ke 9 yang sudah saya
+          upload. Selamat mengerjakan.
           <br />
           <strong>Baca Selengkapnya...</strong>
         </p>
@@ -89,7 +433,7 @@ const AssignmentCard = () => (
       </div>
     </div>
   </article>
-)
+);
 
 const DiscussionFeed = ({ courseName, lecturer }) => (
   <section className="cd-feed-card">
@@ -108,38 +452,263 @@ const DiscussionFeed = ({ courseName, lecturer }) => (
     </div>
     <AssignmentCard />
   </section>
-)
+);
 
-const RightPanel = () => (
-  <aside className="cd-right-panel">
-    <section>
-      <h3>Tugas belum dikumpulkan</h3>
-      <div className="cd-side-card empty-task">Tidak ada tugas.</div>
-    </section>
+// const AttendancePanel = ({ kehadiran }) => {
+//   const hadir     = kehadiran?.hadir ?? 0
+//   const totalSesi = kehadiran?.totalSesi ?? 0
+//   const pct       = totalSesi > 0 ? Math.round((hadir / totalSesi) * 100) : 0
 
-    <section>
-      <h3>Presensi</h3>
-      <div className="cd-side-card cd-attendance-card">
-        <strong>Kehadiran</strong>
-        <p>15 dari 16 Total Sesi <Ico name="info-circle" size={12} /></p>
-        <div className="cd-attendance-grid">
-          <div><span>Hadir</span><strong>15</strong></div>
-          <div><span>Sakit</span><strong>0</strong></div>
-          <div><span>Izin</span><strong>1</strong></div>
-          <div><span>Alpa</span><strong>0</strong></div>
+//   // ⚠️ Sakit/Izin/Alpa belum ada di skema → 0 (bukan dari DB)
+//   const sakit = 0, izin = 0, alpa = 0
+// }
+
+const RightPanel = ({ kehadiran }) => {
+  const hadir = kehadiran?.hadir ?? 0;
+  const totalSesi = kehadiran?.totalSesi ?? 0;
+  const sakit = 0,
+    izin = 0,
+    alpa = 0; // ⚠️ belum ada di skema
+
+  return (
+    <aside className="cd-right-panel">
+      <section>
+        <h3>Tugas belum dikumpulkan</h3>
+        <div className="cd-side-card empty-task">Tidak ada tugas.</div>
+      </section>
+
+      <section>
+        <h3>Presensi</h3>
+        <div className="cd-side-card cd-attendance-card">
+          <strong>Kehadiran</strong>
+          <p>
+            {hadir} dari {totalSesi} Total Sesi{" "}
+            <Ico name="info-circle" size={12} />
+          </p>
+          <div className="cd-attendance-grid">
+            <div>
+              <span>Hadir</span>
+              <strong>{hadir}</strong>
+            </div>
+            <div>
+              <span>Sakit</span>
+              <strong>{sakit}</strong>
+            </div>
+            <div>
+              <span>Izin</span>
+              <strong>{izin}</strong>
+            </div>
+            <div>
+              <span>Alpa</span>
+              <strong>{alpa}</strong>
+            </div>
+          </div>
+          <button type="button">Lihat Detail Presensi</button>
         </div>
-        <button type="button">Lihat Detail Presensi</button>
+      </section>
+    </aside>
+  );
+};
+
+const fmtNpp = (npp) => (npp == null ? "" : Number(npp).toFixed(4));
+
+const Avatar = ({ src, name }) =>
+  src ? (
+    <img className="cd-avatar" src={src} alt={name || ""} />
+  ) : (
+    <div className="cd-avatar cd-avatar-fallback">
+      <Ico name="user" size={18} />
+    </div>
+  );
+
+const PengajarPesertaPanel = ({
+  lecturer,
+  lecturerImg,
+  peserta = [],
+  loading = false,
+}) => {
+  const [q, setQ] = useState("");
+  const filtered = peserta.filter(
+    (p) =>
+      (p.name || "").toLowerCase().includes(q.toLowerCase()) ||
+      fmtNpp(p.npp).includes(q),
+  );
+
+  return (
+    <section className="cd-pp">
+      <p className="cd-pp-label">Dosen Pengajar</p>
+      <div className="cd-pp-lecturer">
+        <Avatar src={lecturerImg} name={lecturer} />
+        <strong>{lecturer}</strong>
       </div>
+
+      <p className="cd-pp-label cd-pp-label-mt">
+        Jumlah {peserta.length} Peserta
+      </p>
+      <div className="cd-pp-search">
+        <span className="cd-pp-search-box">
+          <Ico name="search" size={15} />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search..."
+          />
+        </span>
+        <button type="button" className="cd-pp-search-btn">
+          <Ico name="search" size={14} /> Cari
+        </button>
+      </div>
+
+      <ul className="cd-pp-list">
+        {loading ? (
+          <li className="cd-side-card empty-task">Memuat peserta…</li>
+        ) : filtered.length === 0 ? (
+          <li className="cd-side-card empty-task">Tidak ada peserta.</li>
+        ) : (
+          filtered.map((p, i) => (
+            <li key={p._id || i} className="cd-pp-item">
+              <Avatar src={p.imageUrl} name={p.name} />
+              <div>
+                <p className="cd-pp-name">{p.name}</p>
+                <p className="cd-pp-npp">{fmtNpp(p.npp)}</p>
+              </div>
+            </li>
+          ))
+        )}
+      </ul>
     </section>
-  </aside>
-)
+  );
+};
+
+const KelompokPanel = () => (
+  <section className="cd-empty-card">
+    <svg
+      className="cd-empty-illust"
+      viewBox="0 0 240 160"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="Ilustrasi belum ada kelompok"
+    >
+      <ellipse cx="120" cy="140" rx="78" ry="10" fill="#eef0f7" />
+      {/* kartu kosong di belakang */}
+      <rect
+        x="58"
+        y="34"
+        width="124"
+        height="80"
+        rx="10"
+        fill="#f4f6fc"
+        stroke="#e1e6f2"
+        strokeWidth="2"
+      />
+      <line
+        x1="74"
+        y1="58"
+        x2="166"
+        y2="58"
+        stroke="#dfe4f1"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+      <line
+        x1="74"
+        y1="74"
+        x2="146"
+        y2="74"
+        stroke="#e7ebf6"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+      <line
+        x1="74"
+        y1="90"
+        x2="156"
+        y2="90"
+        stroke="#e7ebf6"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+      {/* tiga avatar (kelompok) */}
+      <g>
+        <circle
+          cx="96"
+          cy="116"
+          r="18"
+          fill="#fff"
+          stroke="#cfd6ea"
+          strokeWidth="2"
+        />
+        <circle cx="96" cy="110" r="6" fill="#b7c0db" />
+        <path d="M86 124c0-6 4.5-10 10-10s10 4 10 10z" fill="#b7c0db" />
+        <circle
+          cx="144"
+          cy="116"
+          r="18"
+          fill="#fff"
+          stroke="#cfd6ea"
+          strokeWidth="2"
+        />
+        <circle cx="144" cy="110" r="6" fill="#b7c0db" />
+        <path d="M134 124c0-6 4.5-10 10-10s10 4 10 10z" fill="#b7c0db" />
+        <circle
+          cx="120"
+          cy="120"
+          r="22"
+          fill="#fff"
+          stroke="#16a34a"
+          strokeWidth="2.5"
+        />
+        <circle cx="120" cy="113" r="7.5" fill="#16a34a" />
+        <path d="M107 130c0-7.5 6-13 13-13s13 5.5 13 13z" fill="#16a34a" />
+      </g>
+    </svg>
+    <p className="cd-empty-title">Belum ada kelompok</p>
+    <p className="cd-empty-sub">Kelompok untuk kelas ini belum dibuat.</p>
+  </section>
+);
 
 const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
-  const selectedCourse = course || DEFAULT_COURSE
-  const courseName = stripClassFromTitle(selectedCourse.title)
-  const classCode = getClassCode(selectedCourse.title)
-  const lecturer = selectedCourse.inst || DEFAULT_COURSE.inst
-  const participants = selectedCourse.participants || 25
+  const { id } = useParams();
+  const {
+    enrolledCourses = [],
+    allCourses = [],
+    backendUrl,
+  } = useContext(AppContext);
+  const realCourse = [...enrolledCourses, ...allCourses].find(
+    (c) => c._id === id,
+  );
+
+  const courseTitle = realCourse?.courseTitle || course?.title || "";
+  const courseName = stripClassFromTitle(courseTitle);
+  const classCode = getClassCode(courseTitle);
+  const lecturer =
+    realCourse?.pengajarNama ||
+    realCourse?.pengajar?.nama ||
+    course?.inst ||
+    "—";
+  const participants =
+    realCourse?.enrolledStudents?.length ??
+    realCourse?.enrolledCount ??
+    course?.participants ??
+    0;
+  const [activeMenu, setActiveMenu] = useState("Sesi Pembelajaran");
+
+  // Daftar peserta langsung dari MongoDB (koleksi User via enrolledStudents)
+  const [peserta, setPeserta] = useState([]);
+  const [loadingPeserta, setLoadingPeserta] = useState(true);
+
+  useEffect(() => {
+    if (!id || !backendUrl) return;
+    setLoadingPeserta(true);
+    axios
+      .get(`${backendUrl}/api/course/${id}/peserta`)
+      .then(({ data }) => {
+        if (data.success) setPeserta(data.peserta);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingPeserta(false));
+  }, [id, backendUrl]);
+  const sessions = buildSessions({ ...realCourse, inst: lecturer });
 
   return (
     <div className="course-detail-page">
@@ -148,8 +717,162 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
           min-height: calc(100vh - 58px);
           background: #f3f6ff;
           color: #26355d;
-          font-family: 'Segoe UI', 'Inter', sans-serif;
+          font-family: var(--font-sans);
         }
+
+        .cd-tabs { display:flex; gap:28px; border-bottom:1px solid #e9ecf5; margin-bottom:16px; }
+.cd-tab { background:none; border:none; cursor:pointer; padding:0 0 10px; font-size:13px; font-weight:700; color:#8a90a6; border-bottom:2px solid transparent; margin-bottom:-1px; transition:color .15s; }
+.cd-tab:hover { color:#5b6178; }
+.cd-tab.active { color:#16a34a; border-bottom-color:#16a34a; }
+
+.cd-tiu-card {
+          background: #fff;
+          border: 1px solid #e4e8f4;
+          border-radius: 9px;
+          padding: 14px 18px;
+          margin-bottom: 14px;
+        }
+        .cd-tiu-card h4 {
+          margin: 0 0 4px;
+          font-size: 14px;
+          font-weight: 800;
+          color: #26355d;
+        }
+        .cd-tiu-text { margin: 0; font-size: 13px; color: #616782; }
+
+.cd-rps-intro h4 { margin:0 0 2px; font-size:14px; font-weight:800; color:#26355d; }
+.cd-muted { color:#9298ad; font-size:13px; }
+.cd-session-subhead { margin:10px 0 12px; }
+
+.cd-panel { padding:4px 0; }
+.cd-pustaka-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+.cd-pustaka-item { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid #e4e8f4; border-radius:9px; padding:12px 14px; }
+.cd-pustaka-title { margin:0; font-size:13.5px; font-weight:700; color:#26355d; }
+.cd-pustaka-link { margin-left:auto; color:#16a34a; }
+
+.cd-lab-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+.cd-lab-card { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid #e4e8f4; border-radius:9px; padding:14px; text-decoration:none; }
+.cd-lab-icon { width:42px; height:42px; border-radius:9px; display:grid; place-items:center; background:#eafaf0; color:#16a34a; }
+.cd-lab-title { margin:0; font-size:13.5px; font-weight:700; color:#26355d; }
+
+        /* ====== Tabs RPS / Pustaka / Virtual Lab ====== */
+        .cd-tabs {
+          display: flex;
+          gap: 28px;
+          border-bottom: 1px solid #e9ecf5;
+          margin-bottom: 16px;
+        }
+        .cd-tab {
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 0 0 10px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #8a90a6;
+          border-bottom: 2px solid transparent;
+          margin-bottom: -1px;
+          transition: color 0.15s;
+        }
+        .cd-tab:hover { color: #5b6178; }
+        .cd-tab.active { color: #16a34a; border-bottom-color: #16a34a; }
+
+        .cd-rps-intro h4 {
+          margin: 0 0 2px;
+          font-size: 14px;
+          font-weight: 800;
+          color: #26355d;
+        }
+        .cd-muted { color: #9298ad; font-size: 13px; }
+        .cd-session-subhead { margin: 10px 0 12px; }
+        .cd-session-count { font-size: 13px; font-weight: 700; color: #009b35; }
+
+        /* ====== Kartu sesi ====== */
+        .cd-session-card {
+          background: #fff;
+          border: 1px solid #e4e8f4;
+          border-radius: 9px;
+          padding: 16px 18px;
+          margin-bottom: 14px;
+          box-shadow: 0 1px 2px rgba(22, 34, 74, 0.02);
+        }
+        .cd-session-top {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 10px;
+        }
+        .cd-session-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: #eef0f7;
+          color: #6b7280;
+          font-size: 12px;
+          font-weight: 700;
+          padding: 4px 10px;
+          border-radius: 6px;
+        }
+        .cd-session-status { font-size: 12px; font-weight: 700; }
+        .cd-session-status.done { color: #16a34a; }
+        .cd-session-status.live { color: #d97706; }
+        .cd-session-status.soon { color: #6b7280; }
+
+        .cd-session-title {
+          margin: 2px 0 10px;
+          font-size: 16px;
+          font-weight: 800;
+          color: #26355d;
+        }
+        .cd-session-meta { margin: 1px 0; font-size: 13px; color: #616782; }
+        .cd-session-lecturer { margin: 2px 0 0; padding-left: 18px; }
+        .cd-session-lecturer li { font-size: 13px; color: #616782; }
+
+        .cd-session-footer {
+          display: flex;
+          gap: 26px;
+          margin-top: 14px;
+          padding-top: 12px;
+          border-top: 1px solid #eef0f7;
+        }
+        .cd-session-footer span {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 13px;
+          color: #5b6178;
+        }
+
+        /* ====== Panel Pustaka & Virtual Lab ====== */
+        .cd-panel { padding: 4px 0; }
+        .cd-pustaka-list {
+          list-style: none; margin: 0; padding: 0;
+          display: flex; flex-direction: column; gap: 10px;
+        }
+        .cd-pustaka-item {
+          display: flex; align-items: center; gap: 12px;
+          background: #fff; border: 1px solid #e4e8f4;
+          border-radius: 9px; padding: 12px 14px;
+        }
+        .cd-pustaka-title { margin: 0; font-size: 13.5px; font-weight: 700; color: #26355d; }
+        .cd-pustaka-link { margin-left: auto; color: #16a34a; }
+
+        .cd-lab-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+          gap: 12px;
+        }
+        .cd-lab-card {
+          display: flex; align-items: center; gap: 12px;
+          background: #fff; border: 1px solid #e4e8f4;
+          border-radius: 9px; padding: 14px; text-decoration: none;
+        }
+        .cd-lab-icon {
+          width: 42px; height: 42px; border-radius: 9px;
+          display: grid; place-items: center;
+          background: #eafaf0; color: #16a34a;
+        }
+        .cd-lab-title { margin: 0; font-size: 13.5px; font-weight: 700; color: #26355d; }
 
         .course-detail-page * {
           box-sizing: border-box;
@@ -577,6 +1300,62 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
           cursor: pointer;
         }
 
+        .cd-tugas-card {
+          background: #fff;
+          border: 1px solid #e4e8f4;
+          border-radius: 12px;
+          padding: 20px 24px;
+          margin-bottom: 16px;
+        }
+        .cd-tugas-title {
+          margin: 0;
+          font-size: 19px;
+          font-weight: 800;
+          color: #1f2a52;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .cd-tugas-badge {
+          font-size: 12px;
+          font-weight: 700;
+          padding: 3px 10px;
+          border-radius: 6px;
+          color: #fff;
+        }
+        .cd-tugas-badge.closed { background: #16a34a; }
+        .cd-tugas-badge.open   { background: #1e9be0; }
+
+        .cd-tugas-sesi { margin: 8px 0 0; font-size: 14px; color: #7b8198; }
+
+        .cd-tugas-foot {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 16px;
+          margin-top: 18px;
+        }
+        .cd-tugas-label { margin: 0; font-size: 13px; color: #9298ad; }
+        .cd-tugas-deadline { margin: 2px 0 0; font-size: 15px; font-weight: 700; color: #1f2a52; }
+
+        .cd-tugas-btn {
+          background: #2c2f7a;
+          color: #fff;
+          border: none;
+          border-radius: 9px;
+          padding: 11px 20px;
+          font-size: 13.5px;
+          font-weight: 700;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .cd-tugas-btn.pending {
+          background: #fff;
+          color: #2c2f7a;
+          border: 1.5px solid #2c2f7a;
+        }
+
         @media (max-width: 1024px) {
           .cd-body {
             grid-template-columns: 220px minmax(0, 1fr);
@@ -628,6 +1407,29 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
             margin-left: -54px;
           }
         }
+        .cd-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: none; }
+        .cd-avatar-fallback { display: grid; place-items: center; background: #e9ecf5; color: #9298ad; }
+
+        .cd-pp-label { font-size: 13px; font-weight: 700; color: #7c83e0; margin: 0 0 10px; }
+        .cd-pp-label-mt { margin-top: 26px; }
+
+        .cd-pp-lecturer { display: flex; align-items: center; gap: 14px; background: #fff; border: 1px solid #e4e8f4; border-radius: 10px; padding: 14px 18px; }
+        .cd-pp-lecturer strong { font-size: 14px; color: #26355d; font-weight: 700; }
+
+        .cd-pp-search { display: flex; gap: 10px; margin-bottom: 6px; }
+        .cd-pp-search-box { flex: 1; display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e4e8f4; border-radius: 9px; padding: 0 14px; color: #9298ad; }
+        .cd-pp-search-box input { flex: 1; border: none; outline: none; padding: 12px 0; font-size: 14px; background: transparent; color: #26355d; }
+        .cd-pp-search-btn { display: inline-flex; align-items: center; gap: 6px; background: #16a34a; color: #fff; border: none; border-radius: 9px; padding: 0 20px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+
+        .cd-pp-list { list-style: none; margin: 8px 0 0; padding: 0; background: #fff; border: 1px solid #e4e8f4; border-radius: 10px; }
+        .cd-pp-item { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid #eef0f7; }
+        .cd-pp-item:last-child { border-bottom: none; }
+        .cd-pp-name { margin: 0; font-size: 14px; font-weight: 700; color: #26355d; }
+        .cd-pp-npp { margin: 1px 0 0; font-size: 12.5px; color: #9298ad; }
+        .cd-empty-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #fff; border: 1px solid #e4e8f4; border-radius: 12px; padding: 48px 24px; box-shadow: 0 1px 2px rgba(22, 34, 74, 0.02); }
+        .cd-empty-illust { width: 180px; max-width: 60%; height: auto; margin-bottom: 18px; }
+        .cd-empty-title { margin: 0; font-size: 16px; font-weight: 800; color: #26355d; }
+        .cd-empty-sub { margin: 4px 0 0; font-size: 13px; color: #9298ad; }
       `}</style>
 
       <header className="cd-hero">
@@ -650,32 +1452,71 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
             </div>
             <div>
               <span>Periode Akademik</span>
-              <strong>2025/2026 Ganjil</strong>
+              <strong>2026/2027 Ganjil</strong>
             </div>
           </div>
         </div>
       </header>
 
       <main className="cd-body">
-        <Sidebar onBack={onBack} />
+        <Sidebar onBack={onBack} active={activeMenu} onSelect={setActiveMenu} />
 
         <div className="cd-main">
-          <section className="cd-share-card">
-            <p>Bagikan sesuatu di kelas Anda:</p>
-            <div className="cd-shortcuts">
-              <ActionShortcut icon="clipboard-list" label="Survei" color={{ bg: '#fff7da', text: '#e9ad00' }} />
-              <ActionShortcut icon="megaphone" label="Info" color={{ bg: '#e9f7ff', text: '#1e9be0' }} />
-              <ActionShortcut icon="calendar-event" label="Acara" color={{ bg: '#fff0ed', text: '#ff6d4b' }} />
-            </div>
-          </section>
+          {activeMenu === "Sesi Pembelajaran" && (
+            <RpsTabs sessions={sessions} course={realCourse} />
+          )}
 
-          <DiscussionFeed courseName={courseName} lecturer={lecturer} />
+          {activeMenu === "Tugas" && (
+            <TugasPanel
+              items={realCourse?.tugas?.length ? realCourse.tugas : DEMO_TUGAS}
+            />
+          )}
+
+          {activeMenu === "Pengajar & Peserta" && (
+            <PengajarPesertaPanel
+              lecturer={lecturer}
+              lecturerImg={realCourse?.pengajar?.imageUrl}
+              peserta={peserta}
+              loading={loadingPeserta}
+            />
+          )}
+
+          {activeMenu === "Kelompok" && <KelompokPanel />}
+
+          {activeMenu !== "Sesi Pembelajaran" &&
+            activeMenu !== "Tugas" &&
+            activeMenu !== "Pengajar & Peserta" &&
+            activeMenu !== "Kelompok" && (
+              <>
+                <section className="cd-share-card">
+                  <p>Bagikan sesuatu di kelas Anda:</p>
+                  <div className="cd-shortcuts">
+                    <ActionShortcut
+                      icon="clipboard-list"
+                      label="Survei"
+                      color={{ bg: "#fff7da", text: "#e9ad00" }}
+                    />
+                    <ActionShortcut
+                      icon="megaphone"
+                      label="Info"
+                      color={{ bg: "#e9f7ff", text: "#1e9be0" }}
+                    />
+                    <ActionShortcut
+                      icon="calendar-event"
+                      label="Acara"
+                      color={{ bg: "#fff0ed", text: "#ff6d4b" }}
+                    />
+                  </div>
+                </section>
+                <DiscussionFeed courseName={courseName} lecturer={lecturer} />
+              </>
+            )}
         </div>
 
-        <RightPanel />
+        <RightPanel kehadiran={realCourse?.kehadiran} />
       </main>
     </div>
-  )
-}
+  );
+};
 
-export default CourseDetail
+export default CourseDetail;

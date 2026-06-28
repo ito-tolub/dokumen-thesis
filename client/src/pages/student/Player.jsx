@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useState, useRef } from "react";
 import { AppContext } from "../../context/AppContext";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import humanizeDuration from "humanize-duration";
 import YouTube from "react-youtube";
 import Footer from "../../components/student/Footer";
@@ -129,8 +129,17 @@ const Player = () => {
     fetUserEnrolledCourses,
   } = useContext(AppContext);
   const { courseId } = useParams();
+  const [searchParams] = useSearchParams();
+  const sesiParam = parseInt(searchParams.get("sesi"), 10);
   const [courseData, setCourseData] = useState(null);
-  const [selectedChapter, setSelectedChapter] = useState(0);
+  const [selectedChapter, setSelectedChapter] = useState(
+    Number.isInteger(sesiParam) && sesiParam >= 0 ? sesiParam : 0,
+  );
+  useEffect(() => {
+  if (courseData && selectedChapter >= courseData.courseContent.length) {
+    setSelectedChapter(0);
+  }
+}, [courseData]);
   const [playerData, setPlayerData] = useState(null);
   const [progressData, setProgressData] = useState(null);
   const [showAllLectures, setShowAllLectures] = useState(false);
@@ -139,11 +148,14 @@ const Player = () => {
   const watchStartRef = useRef(null);
 
   // Ambil dominant VARK — coba beberapa kemungkinan struktur data
-  const dominant =
+  const rawDominant =
     userData?.varkResult?.dominant ||
     userData?.vark?.dominant ||
     userData?.dominantVark ||
-    null;
+    [];
+  // Selalu jadikan array (kompatibel dengan data lama bertipe string)
+  const dominantArr = Array.isArray(rawDominant) ? rawDominant : [rawDominant];
+  const dominantSet = dominantArr.map(normalizeVark).filter(Boolean);
 
   const durationCategory = getDurationCategory(userData);
 
@@ -199,7 +211,7 @@ const Player = () => {
     }
   };
 
-    // Tambahkan fungsi trackActivity setelah getCourseProgress
+  // Tambahkan fungsi trackActivity setelah getCourseProgress
   const trackActivity = async (lectureId, duration = 0) => {
     try {
       const token = await getToken();
@@ -398,10 +410,11 @@ const Player = () => {
   if (!courseData) return <Loading />;
 
   const currentChapter = courseData.courseContent[selectedChapter];
+  const dominantLabelText = dominantSet.map((c) => varkLabel[c]).join(" / "); // "Visual / Auditory / Read/Write"
   const lectures = currentChapter?.chapterContent || [];
 
   // --- Logika Rekomendasi: Top-1 dengan scoring ---
-  const dominantNorm = normalizeVark(dominant);
+  const dominantNorm = dominantSet[0] || null;
 
   /**
    * Fungsi skor untuk setiap lecture (0–100):
@@ -416,7 +429,9 @@ const Player = () => {
 
     // ── Komponen VARK (0 atau 60) ─────────────────────────────────────────
     const varkMatch =
-      dominantNorm && normalizeVark(lecture.tags) === dominantNorm;
+      dominantSet.length > 0 &&
+      dominantSet.includes(normalizeVark(lecture.tags));
+
     if (varkMatch) score += 60;
 
     // ── Komponen Durasi (0–40, proporsional terhadap kedekatan range) ─────
@@ -496,13 +511,13 @@ const Player = () => {
                 }`}
               >
                 <p className="text-xs text-gray-400 mb-0.5">
-                  Objek Pembelajaran {chapter.chapterOrder}
+                  Pertemuan Minggu {chapter.chapterOrder}
                 </p>
                 <p
                   className={`text-sm font-medium ${selectedChapter === index ? "text-blue-700" : "text-gray-700"}`}
                 >
                   {chapter.chapterTitle.replace(
-                    `Pertemuan ${chapter.chapterOrder} - `,
+                    `${chapter.chapterTitle} - `,
                     "",
                   )}
                 </p>
@@ -524,7 +539,7 @@ const Player = () => {
         <div className="flex-1 p-6 md:p-8 overflow-y-auto">
           {/* Header Pertemuan */}
           <div className="mb-6">
-            <h1 className="text-xl font-bold text-gray-800">
+            <h1 className="text-base font-bold text-gray-800">
               {currentChapter?.chapterTitle.replace(
                 `Pertemuan ${currentChapter?.chapterOrder} - `,
                 "",
@@ -632,7 +647,7 @@ const Player = () => {
                     <div
                       className={`w-9 h-9 ${colors.accent} rounded-lg flex items-center justify-center flex-shrink-0`}
                     >
-                      <span className="text-base">
+                      <span className="text-sm">
                         {varkEmoji[normalizeVark(lecture.tags)]}
                       </span>
                     </div>

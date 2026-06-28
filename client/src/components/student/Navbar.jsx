@@ -230,7 +230,7 @@ const Navbar = () => {
   // Item navigasi utama (ala Edlink)
   const navItems = [
     { label: 'Beranda', icon: Ico.home, to: '/' },
-    { label: 'Timeline & Berita', icon: Ico.news, to: '/', soon: true },
+    { label: 'Timeline & Berita', icon: Ico.news, to: '/timeline' },
     { label: 'Obrolan', icon: Ico.chat, to: '/', soon: true },
     { label: 'Jelajah', icon: Ico.compass, to: '/course-list' },
   ]

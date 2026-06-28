@@ -1,23 +1,37 @@
-import React, { useContext } from 'react'
-import { Link } from 'react-router-dom'
-import { AppContext } from '../../context/AppContext'
+import React, { useContext } from "react";
+import { Link } from "react-router-dom";
+import { AppContext } from "../../context/AppContext";
+import { toast } from "react-toastify";
 
-const CourseCard = ({ course, isRecommended = false, badgeEmoji = '' }) => {
-  const { calculateRating } = useContext(AppContext)
+const CourseCard = ({ course, isRecommended = false, badgeEmoji = "" }) => {
+  const { calculateRating, enrolledCourses } = useContext(AppContext);
+
+  // Cek apakah praja terdaftar di course ini
+  const isEnrolled = (enrolledCourses || []).some(
+    (c) => String(c._id || c) === String(course._id),
+  );
+
+  const handleClick = (e) => {
+    window.scrollTo(0, 0);
+    if (!isEnrolled) {
+      e.preventDefault(); // batalkan navigasi <Link>
+      toast.info("Anda belum terdaftar dalam mata kuliah ini.");
+    }
+  };
 
   // Nama dosen: pengajarNama (dari pegawai) → fallback
-  const pengajar = course?.pengajarNama || 'Dosen Pengajar'
+  const pengajar = course?.pengajarNama || "Dosen Pengajar";
 
   // Jadwal manual dari database
-  const sch = course?.schedule
+  const sch = course?.schedule;
   const jadwal = sch?.day
-    ? `${sch.day}${sch.startTime ? `, ${sch.startTime}` : ''}${sch.endTime ? ` – ${sch.endTime}` : ''}`
-    : null
+    ? `${sch.day}${sch.startTime ? `, ${sch.startTime}` : ""}${sch.endTime ? ` – ${sch.endTime}` : ""}`
+    : null;
 
   return (
     <Link
       to={`/course/${course._id}`}
-      onClick={() => window.scrollTo(0, 0)}
+      onClick={handleClick}
       className="border border-gray-500/30 pb-6 overflow-hidden rounded-lg relative group hover:shadow-lg transition-shadow"
     >
       {/* Badge Rekomendasi */}
@@ -34,14 +48,25 @@ const CourseCard = ({ course, isRecommended = false, badgeEmoji = '' }) => {
       />
 
       <div className="p-3 text-left">
-        <h3 className="text-base font-semibold line-clamp-2">{course.courseTitle}</h3>
+        <h3 className="text-base font-semibold line-clamp-2">
+          {course.courseTitle}
+        </h3>
         <p className="text-gray-500 text-sm mt-1">{pengajar}</p>
 
         {/* Jadwal */}
         {jadwal && (
           <div className="flex items-center gap-1.5 text-gray-600 text-xs mt-2">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 shrink-0">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-gray-400 shrink-0"
+            >
               <rect x="3" y="4" width="18" height="18" rx="2" />
               <path d="M16 2v4M8 2v4M3 10h18" />
             </svg>
@@ -50,7 +75,7 @@ const CourseCard = ({ course, isRecommended = false, badgeEmoji = '' }) => {
         )}
       </div>
     </Link>
-  )
-}
+  );
+};
 
-export default CourseCard
+export default CourseCard;
