@@ -9,7 +9,7 @@ const lectureSchema = new mongoose.Schema(
     isPreviewFree: { type: Boolean, required: true },
     lectureOrder: { type: Number, required: true },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const chapterSchema = new mongoose.Schema(
@@ -19,7 +19,7 @@ const chapterSchema = new mongoose.Schema(
     chapterTitle: { type: String, required: true },
     chapterContent: [lectureSchema],
   },
-  { _id: false }
+  { _id: false },
 );
 
 const courseSchema = new mongoose.Schema(
@@ -35,7 +35,15 @@ const courseSchema = new mongoose.Schema(
       { userId: { type: String }, rating: { type: Number, min: 1, max: 5 } },
     ],
 
-    educator: { type: String, required: true }, // NIP dosen (kunci ke pegawai.nip)
+    educator: {
+      type: [String],
+      required: true,
+      validate: {
+        validator: (nips) => Array.isArray(nips) && nips.length > 0,
+
+        message: "Minimal satu NIP dosen wajib diisi",
+      },
+    },
 
     enrolledStudents: [{ type: String, ref: "User" }],
 
@@ -60,7 +68,7 @@ const courseSchema = new mongoose.Schema(
     minimize: false,
     toJSON: { virtuals: true }, // ← wajib agar virtual ikut saat di-JSON-kan
     toObject: { virtuals: true },
-  }
+  },
 );
 
 /* ============================================================
@@ -69,9 +77,9 @@ const courseSchema = new mongoose.Schema(
    ============================================================ */
 courseSchema.virtual("pengajar", {
   ref: "Pegawai",
-  localField: "educator", // nilai NIP di course
-  foreignField: "nip", // dicocokkan ke pegawai.nip
-  justOne: true,
+  localField: "educator", 
+  foreignField: "nip", 
+  justOne: false,
 });
 
 // Model dikompilasi PALING AKHIR, setelah virtual terpasang

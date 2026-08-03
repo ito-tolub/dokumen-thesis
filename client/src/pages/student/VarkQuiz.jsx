@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useMemo, useState } from "react";
 import { AppContext } from "../../context/AppContext";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -364,29 +364,65 @@ const questions = [
       },
     ],
   },
+  {
+  id: 16,
+  question:
+    "Ketika ditempatkan pada unit kerja baru dan perlu memahami tata letak serta alur pelayanan, kamu lebih memilih:",
+  options: [
+    {
+      label: "A",
+      text: "Mengikuti peninjauan langsung dan mencoba alur pelayanan tersebut",
+      type: "K",
+    },
+    {
+      label: "B",
+      text: "Melihat denah ruangan dan diagram alur pelayanan",
+      type: "V",
+    },
+    {
+      label: "C",
+      text: "Mendengarkan penjelasan dari petugas dan mengajukan pertanyaan",
+      type: "A",
+    },
+    {
+      label: "D",
+      text: "Membaca panduan tertulis mengenai tata letak dan prosedur pelayanan",
+      type: "R",
+    },
+  ],
+},
 ];
 
 const typeLabels = {
   V: {
     label: "Visual",
-    color: "blue",
-    desc: "Kamu belajar paling baik melalui gambar, diagram, grafik, dan representasi visual lainnya.",
+    desc: "Menunjukkan preferensi terhadap diagram, grafik, peta, pola, dan representasi visual.",
   },
   A: {
-    label: "Auditory",
-    color: "green",
-    desc: "Kamu belajar paling baik melalui mendengarkan, diskusi, dan penjelasan lisan.",
+    label: "Aural",
+    desc: "Menunjukkan preferensi terhadap penjelasan lisan, diskusi, tanya jawab, dan percakapan.",
   },
   R: {
     label: "Read/Write",
-    color: "purple",
-    desc: "Kamu belajar paling baik melalui membaca dan menulis teks.",
+    desc: "Menunjukkan preferensi terhadap teks, daftar, catatan, dan kegiatan membaca atau menulis.",
   },
   K: {
     label: "Kinesthetic",
-    color: "orange",
-    desc: "Kamu belajar paling baik melalui pengalaman langsung dan praktik nyata.",
+    desc: "Menunjukkan preferensi terhadap contoh nyata, pengalaman, praktik, simulasi, dan penerapan langsung.",
   },
+};
+
+const typeOrder = ["V", "A", "R", "K"];
+
+/**
+ * Mengubah urutan tampil pilihan secara deterministik berdasarkan indeks soal.
+ * Tujuannya agar posisi modalitas tidak selalu sama pada setiap pertanyaan.
+ * Pemetaan jawaban ke V, A, R, atau K tetap mengikuti properti `type`.
+ */
+const orderOptionsForDisplay = (options, questionIndex) => {
+  if (!Array.isArray(options) || options.length === 0) return [];
+  const offset = questionIndex % options.length;
+  return [...options.slice(offset), ...options.slice(0, offset)];
 };
 
 const VarkQuiz = () => {
@@ -394,179 +430,245 @@ const VarkQuiz = () => {
   const navigate = useNavigate();
 
   const [currentQ, setCurrentQ] = useState(0);
-  const [answers, setAnswers] = useState({}); // { questionIndex: [type1, type2, ...] }
+  const [answers, setAnswers] = useState({});
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  const currentQuestion = questions[currentQ];
+
+  const displayedOptions = useMemo(
+    () => orderOptionsForDisplay(currentQuestion.options, currentQ),
+    [currentQuestion, currentQ],
+  );
+
+  const selectedTypes = answers[currentQ] || [];
+
+  const answeredQuestionCount = useMemo(
+    () =>
+      Object.values(answers).filter(
+        (selected) => Array.isArray(selected) && selected.length > 0,
+      ).length,
+    [answers],
+  );
+
   const toggleOption = (type) => {
-    const current = answers[currentQ] || [];
-    const already = current.includes(type);
-    const updated = already
-      ? current.filter((t) => t !== type)
-      : [...current, type];
-    setAnswers({ ...answers, [currentQ]: updated });
+    setAnswers((previous) => {
+      const current = previous[currentQ] || [];
+      const updated = current.includes(type)
+        ? current.filter((item) => item !== type)
+        : [...current, type];
+
+      return { ...previous, [currentQ]: updated };
+    });
   };
 
-  const isSelected = (type) => (answers[currentQ] || []).includes(type);
+  const isSelected = (type) => selectedTypes.includes(type);
 
-  const handleNext = () => {
-    if (!answers[currentQ] || answers[currentQ].length === 0) {
-      toast.warn("Pilih minimal satu jawaban!");
+  const goToNextQuestion = () => {
+    if (currentQ < questions.length - 1) {
+      setCurrentQ((previous) => previous + 1);
       return;
     }
+
+    calculateResult(answers);
+  };
+
+  const handleSkip = () => {
+    const updatedAnswers = { ...answers, [currentQ]: [] };
+    setAnswers(updatedAnswers);
+
     if (currentQ < questions.length - 1) {
-      setCurrentQ(currentQ + 1);
-    } else {
-      calculateResult();
+      setCurrentQ((previous) => previous + 1);
+      return;
     }
+
+    calculateResult(updatedAnswers);
   };
 
   const handleBack = () => {
-    if (currentQ > 0) setCurrentQ(currentQ - 1);
+    if (currentQ > 0) {
+      setCurrentQ((previous) => previous - 1);
+    }
   };
 
-  const calculateResult = async () => {
-    // Hitung skor mentah
+  const calculateResult = async (answerSnapshot = answers) => {
     const rawScores = { V: 0, A: 0, R: 0, K: 0 };
-    Object.values(answers).forEach((types) => {
-      types.forEach((type) => rawScores[type]++);
+
+    Object.values(answerSnapshot).forEach((types) => {
+      if (!Array.isArray(types)) return;
+      types.forEach((type) => {
+        if (Object.prototype.hasOwnProperty.call(rawScores, type)) {
+          rawScores[type] += 1;
+        }
+      });
     });
 
-    // Normalisasi L1: bagi setiap skor dengan total seluruh pilihan
-    // Menghasilkan distribusi proporsional [0,1] yang sebanding antar praja
-    const total = Object.values(rawScores).reduce((a, b) => a + b, 0);
-    const normalizedScores = {
-      V: total > 0 ? parseFloat((rawScores.V / total).toFixed(4)) : 0,
-      A: total > 0 ? parseFloat((rawScores.A / total).toFixed(4)) : 0,
-      R: total > 0 ? parseFloat((rawScores.R / total).toFixed(4)) : 0,
-      K: total > 0 ? parseFloat((rawScores.K / total).toFixed(4)) : 0,
-    };
-
-    const maxScore = Math.max(...Object.values(normalizedScores));
-    const EPS = 1e-9;
-    const dominant = Object.keys(normalizedScores).filter(
-      (s) => Math.abs(normalizedScores[s] - maxScore) < EPS,
+    const totalSelections = Object.values(rawScores).reduce(
+      (sum, value) => sum + value,
+      0,
     );
 
-    // Yang dikirim ke database: skor ternormalisasi [0,1]
-    const varkResult = { scores: normalizedScores, dominant };
+    if (totalSelections === 0) {
+      toast.warn("Pilih setidaknya satu jawaban sebelum melihat hasil.");
+      return;
+    }
 
-    // Yang ditampilkan di UI: skor mentah agar poin terbaca natural oleh praja
-    setResult({ scores: rawScores, dominant });
+    const highestScore = Math.max(...Object.values(rawScores));
+    const highestModalities = typeOrder.filter(
+      (type) => rawScores[type] === highestScore,
+    );
+
+    const completedQuestions = Object.values(answerSnapshot).filter(
+      (types) => Array.isArray(types) && types.length > 0,
+    ).length;
+
+    const varkResult = {
+      instrument: "adapted-vark-modalities",
+      scoringMethod: "raw-count-vector",
+      questionnaireVersion: "custom-workplace-1.0",
+      rawScores,
+      highestModalities,
+      // Kompatibilitas dengan struktur backend lama.
+      // Field `scores` sekarang menyimpan skor mentah VARK.
+      scores: rawScores,
+      dominant: highestModalities,
+      completedQuestions,
+      skippedQuestions: questions.length - completedQuestions,
+      totalQuestions: questions.length,
+      totalSelections,
+      officialPreference: null,
+    };
+
+    setResult(varkResult);
 
     try {
       setLoading(true);
       const token = await getToken();
       const { data } = await axios.post(
-        backendUrl + "/api/user/save-vark",
+        `${backendUrl}/api/user/save-vark`,
         { varkResult },
         { headers: { Authorization: `Bearer ${token}` } },
       );
+
       if (data.success) {
         setUserData(data.user);
-        toast.success("Hasil VARK berhasil disimpan!");
+        toast.success("Profil preferensi VARK berhasil disimpan.");
       } else {
-        toast.error(data.message);
+        toast.error(data.message || "Hasil VARK gagal disimpan.");
       }
     } catch (error) {
-      toast.error(error.message);
+      toast.error(
+        error?.response?.data?.message ||
+          error.message ||
+          "Terjadi kesalahan saat menyimpan hasil.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  const resetQuiz = () => {
+    setResult(null);
+    setAnswers({});
+    setCurrentQ(0);
+  };
+
   const progress = Math.round(((currentQ + 1) / questions.length) * 100);
 
-  // Tampilan Hasil
   if (result) {
-    const dominantList = (result.dominant || [])
-      .map((code) => typeLabels[code])
+    const highestNames = result.highestModalities
+      .map((type) => typeLabels[type]?.label)
       .filter(Boolean);
-    const dominant = dominantList[0]; // gaya pertama — dipakai untuk warna kartu
-    const isMultimodal = dominantList.length > 1;
-    const colorMap = {
-      blue: "bg-blue-100 text-blue-700 border-blue-300",
-      green: "bg-green-100 text-green-700 border-green-300",
-      purple: "bg-purple-100 text-purple-700 border-purple-300",
-      orange: "bg-orange-100 text-orange-700 border-orange-300",
-    };
-    const barColorMap = {
-      blue: "bg-blue-500",
-      green: "bg-green-500",
-      purple: "bg-purple-500",
-      orange: "bg-orange-500",
-    };
-    const typeColor = { V: "blue", A: "green", R: "purple", K: "orange" };
-    const totalAnswers = Object.values(result.scores).reduce(
-      (a, b) => a + b,
-      0,
-    );
 
     return (
       <div className="min-h-screen bg-gradient-to-b from-cyan-50 to-white flex items-center justify-center px-4 py-16">
-        <div className="bg-white rounded-2xl shadow-lg max-w-lg w-full p-8">
+        <div className="bg-white rounded-2xl shadow-lg max-w-xl w-full p-8">
           <div className="text-center mb-6">
-            <div className="text-5xl mb-3">🎉</div>
+            <div className="text-5xl mb-3">✓</div>
             <h2 className="text-2xl font-bold text-gray-800">
-              Hasil Kuesioner VARK
+              Profil Preferensi VARK
             </h2>
-            <p className="text-gray-500 mt-1">Gaya belajar dominan kamu:</p>
-          </div>
-
-          <div
-            className={`border-2 rounded-xl p-5 text-center mb-6 ${colorMap[dominant.color]}`}
-          >
-            <p className="text-3xl font-bold">
-              {dominantList.map((d) => d.label).join(" / ")}
-            </p>
-            <p className="mt-2 text-sm">
-              {isMultimodal
-                ? `Kamu multimodal — belajar baik melalui beberapa gaya sekaligus (${dominantList.map((d) => d.label).join(", ")}).`
-                : dominant.desc}
+            <p className="text-gray-500 mt-2">
+              Modalitas dengan skor mentah tertinggi:
             </p>
           </div>
 
-          <div className="space-y-3 mb-8">
-            {Object.entries(result.scores).map(([type, score]) => (
-              <div key={type}>
-                <div className="flex justify-between text-sm text-gray-600 mb-1">
-                  <span>{typeLabels[type].label}</span>
-                  <span>
-                    {score} poin (
-                    {totalAnswers > 0
-                      ? Math.round((score / totalAnswers) * 100)
-                      : 0}
-                    %)
-                  </span>
+          <div className="border-2 border-blue-200 bg-blue-50 rounded-xl p-5 text-center mb-6">
+            <p className="text-2xl font-bold text-blue-700">
+              {highestNames.join(" / ")}
+            </p>
+            <p className="mt-2 text-sm text-blue-700">
+              {result.highestModalities.length > 1
+                ? "Beberapa modalitas memperoleh skor tertinggi yang sama."
+                : typeLabels[result.highestModalities[0]]?.desc}
+            </p>
+          </div>
+
+          <div className="space-y-4 mb-6">
+            {typeOrder.map((type) => {
+              const rawScore = result.rawScores[type];
+              const percentage =
+                result.totalSelections > 0
+                  ? (rawScore / result.totalSelections) * 100
+                  : 0;
+
+              return (
+                <div key={type}>
+                  <div className="flex justify-between text-sm text-gray-700 mb-1">
+                    <span className="font-medium">
+                      {typeLabels[type].label}
+                    </span>
+                    <span>
+                      {rawScore} poin ({percentage.toFixed(1)}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-3">
+                    <div
+                      className="h-3 rounded-full bg-blue-500 transition-all"
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-3">
-                  <div
-                    className={`h-3 rounded-full ${barColorMap[typeColor[type]]}`}
-                    style={{
-                      width: `${totalAnswers > 0 ? (score / totalAnswers) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
+          </div>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 mb-6">
+            <p className="font-semibold mb-1">Catatan metodologis</p>
+            <p>
+              Hasil dan data yang disimpan menggunakan skor mentah VARK.
+              Persentase pada tampilan hanya membantu interpretasi dan tidak
+              disimpan sebagai vektor rekomendasi. Aplikasi ini tidak menghasilkan
+              kategori resmi VARK seperti “mild Visual”, “VRK”, atau kategori resmi
+              lainnya.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-sm text-gray-600 mb-8">
+            <div className="rounded-lg bg-gray-50 p-3">
+              <span className="block text-xs text-gray-400">Terjawab</span>
+              <strong>{result.completedQuestions} pertanyaan</strong>
+            </div>
+            <div className="rounded-lg bg-gray-50 p-3">
+              <span className="block text-xs text-gray-400">Dilewati</span>
+              <strong>{result.skippedQuestions} pertanyaan</strong>
+            </div>
           </div>
 
           <div className="flex gap-3">
             <button
+              type="button"
               onClick={() => navigate("/")}
               className="flex-1 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium"
             >
               Kembali ke Beranda
             </button>
             <button
-              onClick={() => {
-                setResult(null);
-                setAnswers({});
-                setCurrentQ(0);
-              }}
-              className="flex-1 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-600 font-medium"
+              type="button"
+              onClick={resetQuiz}
+              className="flex-1 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium"
             >
-              Ulangi Quiz
+              Ulangi Kuis
             </button>
           </div>
         </div>
@@ -574,14 +676,9 @@ const VarkQuiz = () => {
     );
   }
 
-  // Tampilan Pertanyaan
-  const q = questions[currentQ];
-  const selected = answers[currentQ] || [];
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-cyan-50 to-white flex items-center justify-center px-4 py-16">
-      <div className="bg-white rounded-2xl shadow-lg max-w-lg w-full p-8">
-        {/* Header */}
+      <div className="bg-white rounded-2xl shadow-lg max-w-xl w-full p-8">
         <div className="mb-6">
           <div className="flex justify-between text-sm text-gray-500 mb-2">
             <span>
@@ -595,66 +692,91 @@ const VarkQuiz = () => {
               style={{ width: `${progress}%` }}
             />
           </div>
+          <p className="text-xs text-gray-400 mt-2">
+            {answeredQuestionCount} pertanyaan telah dijawab
+          </p>
         </div>
 
-        {/* Pertanyaan */}
         <h2 className="text-lg font-semibold text-gray-800 mb-2">
-          {q.question}
+          {currentQuestion.question}
         </h2>
-        <p className="text-xs text-gray-400 mb-4">
-          Kamu boleh memilih lebih dari satu jawaban
+        <p className="text-sm text-gray-500 mb-5">
+          Pilih satu atau beberapa jawaban yang paling sesuai. Lewati
+          pertanyaan apabila tidak ada pilihan yang sesuai.
         </p>
 
-        {/* Pilihan */}
         <div className="space-y-3">
-          {q.options.map((opt) => (
-            <button
-              key={opt.label}
-              onClick={() => toggleOption(opt.type)}
-              className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all duration-200 text-gray-700 ${
-                isSelected(opt.type)
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-5 h-5 rounded flex items-center justify-center border-2 flex-shrink-0 ${
-                    isSelected(opt.type)
-                      ? "bg-blue-500 border-blue-500"
-                      : "border-gray-300"
-                  }`}
-                >
-                  {isSelected(opt.type) && (
-                    <span className="text-white text-xs">✓</span>
-                  )}
-                </div>
-                <span>
-                  <span className="font-semibold text-blue-600 mr-1">
-                    {opt.label}.
+          {displayedOptions.map((option, index) => {
+            const displayLabel = String.fromCharCode(65 + index);
+            const selected = isSelected(option.type);
+
+            return (
+              <button
+                type="button"
+                key={`${currentQuestion.id}-${option.type}`}
+                onClick={() => toggleOption(option.type)}
+                aria-pressed={selected}
+                className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all duration-200 text-gray-700 ${
+                  selected
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-5 h-5 rounded flex items-center justify-center border-2 flex-shrink-0 ${
+                      selected
+                        ? "bg-blue-500 border-blue-500"
+                        : "border-gray-300"
+                    }`}
+                  >
+                    {selected && <span className="text-white text-xs">✓</span>}
+                  </div>
+                  <span>
+                    <span className="font-semibold text-blue-600 mr-1">
+                      {displayLabel}.
+                    </span>
+                    {option.text}
                   </span>
-                  {opt.text}
-                </span>
-              </div>
-            </button>
-          ))}
+                </div>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Navigasi */}
-        <div className="flex justify-between items-center mt-6">
+        <div className="flex flex-wrap justify-between items-center gap-3 mt-7">
           <button
+            type="button"
             onClick={handleBack}
-            className={`text-sm text-gray-400 hover:text-gray-600 ${currentQ === 0 ? "invisible" : ""}`}
+            className={`text-sm text-gray-500 hover:text-gray-700 ${
+              currentQ === 0 ? "invisible" : ""
+            }`}
           >
             ← Sebelumnya
           </button>
-          <button
-            onClick={handleNext}
-            disabled={loading}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50"
-          >
-            {currentQ === questions.length - 1 ? "Selesai" : "Selanjutnya →"}
-          </button>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSkip}
+              disabled={loading}
+              className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-600 font-medium disabled:opacity-50"
+            >
+              Lewati
+            </button>
+            <button
+              type="button"
+              onClick={goToNextQuestion}
+              disabled={loading}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50"
+            >
+              {currentQ === questions.length - 1
+                ? loading
+                  ? "Menyimpan..."
+                  : "Lihat Hasil"
+                : "Selanjutnya →"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

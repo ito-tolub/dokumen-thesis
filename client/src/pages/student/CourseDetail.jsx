@@ -142,8 +142,15 @@ const statusSesi = (tgl) => {
 const buildSessions = (course) => {
   const content = course?.courseContent || [];
   const schedule = course?.schedule || {};
-  const lecturer =
-    course?.pengajarNama || course?.pengajar?.nama || course?.inst || "—";
+  const lecturer = Array.isArray(selectedCourse?.pengajar)
+  ? selectedCourse.pengajar
+      .map((dosen) => dosen?.nama)
+      .filter(Boolean)
+      .join(', ')
+  : selectedCourse?.pengajar?.nama ||
+    selectedCourse?.pengajarNama ||
+    selectedCourse?.inst ||
+    DEFAULT_COURSE.inst
 
   return content
     .map((ch, rawIndex) => ({ ch, rawIndex }))

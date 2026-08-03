@@ -20,7 +20,14 @@ const CourseCard = ({ course, isRecommended = false, badgeEmoji = "" }) => {
   };
 
   // Nama dosen: pengajarNama (dari pegawai) → fallback
-  const pengajar = course?.pengajarNama || "Dosen Pengajar";
+  const pengajar = Array.isArray(course?.pengajar)
+  ? course.pengajar
+      .map((dosen) => dosen?.nama)
+      .filter(Boolean)
+      .join(', ')
+  : course?.pengajar?.nama ||
+    course?.pengajarNama ||
+    'Dosen Pengajar'
 
   // Jadwal manual dari database
   const sch = course?.schedule;

@@ -8,15 +8,35 @@ import axios from "axios";
 import { toast } from "react-toastify";
 import Loading from "../../components/student/Loading";
 
-// Tentukan kategori durasi berdasarkan nilai keprajaan
-const getDurationCategory = (userData) => {
-  const mk = userData?.mentalKepribadian || 0;
-  const samapta = userData?.samapta || 0;
-  const avg = (mk + samapta) / 2;
+const HYBRID_WEIGHT = {
+  vark: 0.7,
+  instructional: 0.3,
+};
 
-  if (avg > 80.53) return "tinggi"; // durasi panjang: 15–30 menit
-  if (avg >= 76.28) return "sedang"; // durasi sedang:  5–15 menit
-  return "rendah"; // durasi pendek:  0–5 menit
+const MENTAL_REFERENCE_VALUE = 84;
+// Cosine similarity VARK antara profil pengguna dan objek pembelajaran
+const cosineSimilarity = (userVector, objectVector) => {
+  if (!userVector || !objectVector) return 0;
+
+  const keys = ["V", "A", "R", "K"];
+
+  const user = keys.map((key) => Number(userVector[key] || 0));
+  const object = keys.map((key) => Number(objectVector[key] || 0));
+
+  const dot = user.reduce(
+    (sum, value, index) => sum + value * object[index],
+    0,
+  );
+
+  const userNorm = Math.sqrt(user.reduce((sum, value) => sum + value ** 2, 0));
+
+  const objectNorm = Math.sqrt(
+    object.reduce((sum, value) => sum + value ** 2, 0),
+  );
+
+  if (userNorm === 0 || objectNorm === 0) return 0;
+
+  return dot / (userNorm * objectNorm);
 };
 
 // Normalisasi tipeVARK — handle "V"/"Visual", "A"/"Auditory", "R"/"Reading"/"Read/Write", "K"/"Kinesthetic"/"Kinestethic"
@@ -67,11 +87,6 @@ const varkColor = {
     badge: "bg-rose-500",
   },
 };
-const durationLabel = {
-  tinggi: "Konten Panjang (15–30 mnt)",
-  sedang: "Konten Sedang (5–15 mnt)",
-  rendah: "Konten Singkat (< 5 mnt)",
-};
 
 const HtmlPlayer = ({ url, title }) => {
   const [htmlContent, setHtmlContent] = React.useState("");
@@ -119,6 +134,33 @@ const HtmlPlayer = ({ url, title }) => {
   );
 };
 
+const getInstructionalProfile = (mentalKepribadian) => {
+  const score = Number(mentalKepribadian);
+
+  if (!Number.isFinite(score)) return null;
+
+  return {
+    contentGranularity: score >= MENTAL_REFERENCE_VALUE ? "macro" : "micro",
+
+    cognitiveLevel: score >= MENTAL_REFERENCE_VALUE ? "C4-C6" : "C1-C3",
+  };
+};
+
+const getInstructionalCompatibility = (lecture, profile) => {
+  if (!lecture || !profile) return 0;
+  const modality = normalizeVark(lecture.tags);
+  // Kinestetik menggunakan cognitiveLevel
+  if (modality === "K") {
+    return lecture.cognitiveLevel === profile.cognitiveLevel ? 1 : 0;
+  }
+
+  // Visual, Auditory, Read/Write menggunakan micro/macro
+  if (["V", "A", "R"].includes(modality)) {
+    return lecture.contentGranularity === profile.contentGranularity ? 1 : 0;
+  }
+  return 0;
+};
+
 const Player = () => {
   const {
     enrolledCourses,
@@ -136,10 +178,10 @@ const Player = () => {
     Number.isInteger(sesiParam) && sesiParam >= 0 ? sesiParam : 0,
   );
   useEffect(() => {
-  if (courseData && selectedChapter >= courseData.courseContent.length) {
-    setSelectedChapter(0);
-  }
-}, [courseData]);
+    if (courseData && selectedChapter >= courseData.courseContent.length) {
+      setSelectedChapter(0);
+    }
+  }, [courseData]);
   const [playerData, setPlayerData] = useState(null);
   const [progressData, setProgressData] = useState(null);
   const [showAllLectures, setShowAllLectures] = useState(false);
@@ -147,17 +189,17 @@ const Player = () => {
   const [watchStart, setWatchStart] = useState(null);
   const watchStartRef = useRef(null);
 
-  // Ambil dominant VARK — coba beberapa kemungkinan struktur data
-  const rawDominant =
-    userData?.varkResult?.dominant ||
-    userData?.vark?.dominant ||
-    userData?.dominantVark ||
-    [];
-  // Selalu jadikan array (kompatibel dengan data lama bertipe string)
-  const dominantArr = Array.isArray(rawDominant) ? rawDominant : [rawDominant];
-  const dominantSet = dominantArr.map(normalizeVark).filter(Boolean);
-
-  const durationCategory = getDurationCategory(userData);
+  // Profil VARK pengguna digunakan sebagai vektor, bukan dominant tunggal
+  const userVarkVector = userData?.varkResult?.scores || null;
+  const userInstructionalProfile = getInstructionalProfile(
+    userData?.mentalKepribadian,
+  );
+  const dominantSet = userVarkVector
+    ? Object.entries(userVarkVector)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 2)
+        .map(([key]) => key)
+    : [];
 
   const getCourseData = () => {
     enrolledCourses.forEach((course) => {
@@ -413,70 +455,75 @@ const Player = () => {
   const dominantLabelText = dominantSet.map((c) => varkLabel[c]).join(" / "); // "Visual / Auditory / Read/Write"
   const lectures = currentChapter?.chapterContent || [];
 
-  // --- Logika Rekomendasi: Top-1 dengan scoring ---
-  const dominantNorm = dominantSet[0] || null;
-
-  /**
-   * Fungsi skor untuk setiap lecture (0–100):
-   *   - Kecocokan VARK  : +60 poin  (bobot utama — CBF gaya belajar)
-   *   - Kecocokan durasi: +40 poin  (bobot sekunder — KBF nilai keprajaan)
-   *
-   * VARK selalu menjadi faktor dominan; durasi memilah jika ada beberapa
-   * lecture dengan VARK yang sama. Hasil akhir: tepat 1 lecture teratas.
-   */
   const scoreLecture = (lecture) => {
-    let score = 0;
+    const varkSimilarity = cosineSimilarity(userVarkVector, lecture.varkvektor);
 
-    // ── Komponen VARK (0 atau 60) ─────────────────────────────────────────
-    const varkMatch =
-      dominantSet.length > 0 &&
-      dominantSet.includes(normalizeVark(lecture.tags));
+    const instructionalCompatibility = getInstructionalCompatibility(
+      lecture,
+      userInstructionalProfile,
+    );
 
-    if (varkMatch) score += 60;
+    const hybridScore =
+      HYBRID_WEIGHT.vark * varkSimilarity +
+      HYBRID_WEIGHT.instructional * instructionalCompatibility;
 
-    // ── Komponen Durasi (0–40, proporsional terhadap kedekatan range) ─────
-    const dur = lecture.lectureDuration || 0;
-    const ranges = { tinggi: [15, 30], sedang: [5, 15], rendah: [0, 5] };
-    const [lo, hi] = ranges[durationCategory];
+    return {
+      varkSimilarity,
 
-    if (dur >= lo && dur <= hi) {
-      // Tepat dalam range ideal: skor durasi penuh
-      score += 40;
-    } else {
-      // Di luar range: berkurang proporsional terhadap jarak
-      const distance = dur < lo ? lo - dur : dur - hi;
-      const maxDistance = 30; // jarak maksimum yang masih dianggap relevan
-      score += Math.max(0, 40 * (1 - distance / maxDistance));
-    }
+      instructionalCompatibility,
 
-    return Math.round(score);
+      hybridScore,
+
+      varkPercentage: Number((varkSimilarity * 100).toFixed(2)),
+
+      hybridPercentage: Number((hybridScore * 100).toFixed(2)),
+    };
   };
 
-  // Hitung skor semua lecture, urutkan tertinggi ke terendah
   const scoredLectures = lectures
-    .map((l) => ({ ...l, _score: scoreLecture(l) }))
-    .sort((a, b) => b._score - a._score);
+  .filter((lecture) => lecture.varkvektor)
+  .map((lecture) => {
+    const result = scoreLecture(lecture);
+    return {
+      ...lecture,
+      _varkSimilarity:
+        result.varkSimilarity,
+      _instructionalCompatibility:
+        result.instructionalCompatibility,
+      _hybridScore:
+        result.hybridScore,
+      _hybridPercentage:
+        result.hybridPercentage,
+    };
+  })
+  .sort(
+    (a, b) =>
+      b._hybridScore -
+      a._hybridScore
+  );
 
-  // ← taruh di sini
-  console.log("mentalKepribadian:", userData?.mentalKepribadian);
-  console.log("samapta:", userData?.samapta);
-  console.log("durationCategory:", durationCategory);
   console.log(
-    "scoredLectures:",
-    scoredLectures.map((l) => ({
-      title: l.lectureTitle,
-      durasi: l.lectureDuration,
-      score: l._score,
+    "VARK recommendation ranking:",
+    scoredLectures.map((lecture) => ({
+      title: lecture.lectureTitle,
+      varkvektor: lecture.varkvektor,
+      similarity: lecture._similarity,
+      score: lecture._score,
     })),
   );
 
-  // Top-1: hanya ambil 1 lecture dengan skor tertinggi sebagai rekomendasi
-  const rekomendasiAkhir = scoredLectures.length > 0 ? [scoredLectures[0]] : [];
+  // Top-1 rekomendasi
+  const rekomendasiAkhir = scoredLectures.slice(0, 3).map((lecture, index) => ({
+    ...lecture,
+    rank: index + 1,
+    similarityPercentage: (lecture._similarity * 100).toFixed(2),
+  }));
 
   // Sisanya tampil di "Objek Pembelajaran Lainnya"
   const lecturesLain = scoredLectures.slice(1);
 
-  const colors = varkColor[dominantNorm] || varkColor["V"];
+  const colors =
+    varkColor[normalizeVark(rekomendasiAkhir[0]?.tags)] || varkColor["V"];
   const isCompleted = (id) => progressData?.lectureCompleted?.includes(id);
 
   return (
@@ -602,7 +649,7 @@ const Player = () => {
           )}
 
           {/* ── Rekomendasi Objek Pembelajaran ── */}
-          {dominantNorm && rekomendasiAkhir.length > 0 && (
+          {rekomendasiAkhir.length > 0 && (
             <div
               className={`mb-6 rounded-2xl border-2 ${colors.border} ${colors.bg} p-4`}
             >
@@ -611,7 +658,9 @@ const Player = () => {
                 <div
                   className={`w-10 h-10 ${colors.accent} rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm`}
                 >
-                  <span className="text-xl">{varkEmoji[dominantNorm]}</span>
+                  <span className="text-xl">
+                    {varkEmoji[dominantSet[0] || "V"]}
+                  </span>
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -621,13 +670,12 @@ const Player = () => {
                     <span
                       className={`text-xs text-white px-2 py-0.5 rounded-full ${colors.badge} font-medium`}
                     >
-                      {varkLabel[dominantNorm]}
+                      {varkLabel[dominantSet[0] || "V"]}
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Objek terbaik berdasarkan gaya belajar{" "}
-                    {varkLabel[dominantNorm]} &{" "}
-                    {durationLabel[durationCategory].toLowerCase()}
+                    Top-3 objek pembelajaran dengan kecocokan VARK tertinggi
+                    berdasarkan cosine similarity
                   </p>
                 </div>
               </div>
@@ -660,6 +708,13 @@ const Player = () => {
                           units: ["h", "m"],
                         })}
                       </p>
+                      <p className="text-xs text-blue-600 font-medium mt-1">
+                        Kecocokan VARK: {lecture.similarityPercentage}%
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        Hybrid Score:
+                        {lecture._hybridPercentage}%
+                      </p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       {isCompleted(lecture.lectureId) && (
@@ -680,7 +735,7 @@ const Player = () => {
           )}
 
           {/* Pesan jika tidak ada dominant VARK */}
-          {!dominantNorm && (
+          {!userVarkVector && (
             <div className="mb-6 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 text-center">
               <p className="text-sm text-gray-400">
                 Selesaikan tes VARK untuk mendapatkan rekomendasi personal 🎯
@@ -693,7 +748,7 @@ const Player = () => {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-gray-700 text-sm">
-                  {dominantNorm
+                  {rekomendasiAkhir.length > 0
                     ? "Objek Pembelajaran Lainnya"
                     : "Semua Objek Pembelajaran"}
                 </h3>
@@ -736,6 +791,10 @@ const Player = () => {
                         {humanizeDuration(lecture.lectureDuration * 60 * 1000, {
                           units: ["h", "m"],
                         })}
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        Hybrid Score:
+                        {lecture._hybridPercentage}%
                       </p>
                     </div>
                     {isCompleted(lecture.lectureId) && (

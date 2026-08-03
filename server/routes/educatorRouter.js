@@ -1,5 +1,5 @@
 import express from 'express'
-import { addCourse, getEducatorCourses, updateRoleToEducator, educatorDashboardData, getEnrolledStudentsData, getStudentEngagementScore,  trackLectureActivity, loginDosen } from '../controllers/educatorController.js';
+import { addCourse, getEducatorCourses, updateRoleToEducator, educatorDashboardData, getEnrolledStudentsData, getStudentEngagementScore,  trackLectureActivity, loginDosen, activateDosenPassword } from '../controllers/educatorController.js';
 import upload from '../configs/multer.js';
 import { protectDosen, protectEducator } from '../middlewares/authMiddleware.js';
 import { clerkMiddleware, requireAuth } from '@clerk/express';
@@ -8,6 +8,10 @@ import { clerkMiddleware, requireAuth } from '@clerk/express';
 const educatorRouter = express.Router()
 
 educatorRouter.post('/login', loginDosen)
+educatorRouter.post(
+  "/activate-password",
+  activateDosenPassword,
+);
 
 //add educator Role
 educatorRouter.get('/update-role', updateRoleToEducator)

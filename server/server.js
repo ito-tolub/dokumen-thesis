@@ -29,7 +29,11 @@ app.post(
   );
 
 // Clerk webhook
-app.post('/clerk', express.json(), clerkWebhooks)
+app.post(
+  "/clerk",
+  express.raw({ type: "application/json" }),
+  clerkWebhooks
+);
 
 // Middleware auth SETELAH webhook
 

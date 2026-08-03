@@ -11,29 +11,31 @@ const nppKey = (v) => {
 
 // Get All Courses
 export const getAllCourses = async (req, res) => {
-    try {
-        const courses = await Course.find({ isPublished: true })
-            .select(['-courseContent', '-enrolledStudents'])
-            .lean();   // lean → objek polos, bisa kita tambah field pengajarNama
+  try {
+    const courses = await Course.find({
+      isPublished: true,
+    })
+      .select([
+        "-courseContent",
+        "-enrolledStudents",
+      ])
+      .populate({
+        path: "pengajar",
+        select: "nip nama jabatan unit_kerja pangkat",
+      });
 
-        // Kumpulkan NIP educator, ambil namanya dari koleksi pegawai (manual join)
-        const nips = [
-            ...new Set(courses.map((c) => String(c.educator)).filter(Boolean)),
-        ];
-        const pegawaiList = await Pegawai.find({ nip: { $in: nips } }).lean();
-        const namaByNip = Object.fromEntries(
-            pegawaiList.map((p) => [String(p.nip), p.nama]),
-        );
+    return res.status(200).json({
+      success: true,
+      courses,
+    });
+  } catch (error) {
+    console.error("Gagal mengambil course:", error);
 
-        const enriched = courses.map((c) => ({
-            ...c,
-            pengajarNama: c.pengajarNama || namaByNip[String(c.educator)] || null,
-        }));
-
-        res.json({ success: true, courses: enriched });
-    } catch (error) {
-        res.json({ success: false, message: error.message });
-    }
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
 
 // GetCourse by Id

@@ -8,6 +8,7 @@ import { LectureActivity } from "../models/LectureActivity.js";
 import jwt from "jsonwebtoken";
 import Pegawai from "../models/pegawai.js";
 import Keprajaan from "../models/Keprajaan.js";
+import bcrypt from "bcryptjs";
 
 export const verifyNipAndBecomeEducator = async (req, res) => {
   try {
@@ -44,36 +45,174 @@ export const verifyNipAndBecomeEducator = async (req, res) => {
   }
 };
 
-export const loginDosen = async (req, res) => {
+export const activateDosenPassword = async (req, res) => {
   try {
-    const { nip } = req.body;
+    const nip = String(req.body.nip || "").trim();
+    const password = String(req.body.password || "");
+    const confirmPassword = String(req.body.confirmPassword || "");
 
-    if (!nip) {
-      return res.json({ success: false, message: "NIP tidak boleh kosong" });
+    if (!nip || !password || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "NIP, password, dan konfirmasi password wajib diisi",
+      });
     }
 
-    // Cari dosen berdasarkan NIP
-    const dosen = await Pegawai.findOne({ nip });
+    // NIP harus tetap berupa String, bukan Number
+    if (!/^\d{18}$/.test(nip)) {
+      return res.status(400).json({
+        success: false,
+        message: "NIP harus terdiri dari 18 digit",
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password minimal terdiri dari 8 karakter",
+      });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Konfirmasi password tidak sama",
+      });
+    }
+
+    const dosen = await Pegawai.findOne({ nip })
+      .select("+password");
 
     if (!dosen) {
-      return res.json({ success: false, message: "NIP tidak ditemukan" });
+      return res.status(404).json({
+        success: false,
+        message: "NIP tidak ditemukan dalam data pegawai",
+      });
     }
 
-    // Buat JWT token
-    const token = jwt.sign(
-      { nip: dosen.nip, nama: dosen.nama },
-      process.env.JWT_DOSEN_SECRET,
-      { expiresIn: "1d" },
+    // Mencegah pengguna menimpa password yang sudah ada
+    if (dosen.password) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Password untuk NIP ini sudah dibuat. Silakan gunakan menu login.",
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Kondisi tambahan mencegah dua request mengaktifkan akun secara bersamaan
+    const updateResult = await Pegawai.updateOne(
+      {
+        _id: dosen._id,
+        $or: [
+          { password: { $exists: false } },
+          { password: null },
+          { password: "" },
+        ],
+      },
+      {
+        $set: {
+          password: passwordHash,
+          passwordCreatedAt: new Date(),
+        },
+      },
     );
 
-    res.json({
+    if (updateResult.modifiedCount !== 1) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Password sudah dibuat atau proses aktivasi sedang dilakukan.",
+      });
+    }
+
+    return res.status(201).json({
       success: true,
+      message: "Password berhasil dibuat. Silakan login.",
+    });
+  } catch (error) {
+    console.error("Aktivasi password dosen gagal:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan saat membuat password",
+    });
+  }
+};
+
+export const loginDosen = async (req, res) => {
+  try {
+    const nip = String(req.body.nip || "").trim();
+    const password = String(req.body.password || "");
+
+    if (!nip || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "NIP dan password wajib diisi",
+      });
+    }
+
+    const dosen = await Pegawai.findOne({ nip })
+      .select("+password");
+
+    if (!dosen) {
+      return res.status(401).json({
+        success: false,
+        message: "NIP atau password salah",
+      });
+    }
+
+    if (!dosen.password) {
+      return res.status(403).json({
+        success: false,
+        code: "PASSWORD_NOT_CREATED",
+        message:
+          "Password belum dibuat. Silakan pilih Buat Password.",
+      });
+    }
+
+    const passwordValid = await bcrypt.compare(
+      password,
+      dosen.password,
+    );
+
+    if (!passwordValid) {
+      return res.status(401).json({
+        success: false,
+        message: "NIP atau password salah",
+      });
+    }
+
+    if (!process.env.JWT_DOSEN_SECRET) {
+      throw new Error("JWT_DOSEN_SECRET belum dikonfigurasi");
+    }
+
+    const token = jwt.sign(
+      {
+        nip: dosen.nip,
+        nama: dosen.nama,
+      },
+      process.env.JWT_DOSEN_SECRET,
+      {
+        expiresIn: "1d",
+      },
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Login berhasil",
       token,
       nama: dosen.nama,
       nip: dosen.nip,
     });
   } catch (error) {
-    res.json({ success: false, message: error.message });
+    console.error("Login dosen gagal:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan saat login",
+    });
   }
 };
 
@@ -102,7 +241,7 @@ export const addCourse = async (req, res) => {
     }
 
     const parsedCourseData = await JSON.parse(courseData);
-    parsedCourseData.educator = educatorNip;
+    parsedCourseData.educator = [educatorNip];
     const newCourse = await Course.create(parsedCourseData);
     const imageUpload = await cloudinary.uploader.upload(imageFile.path);
     newCourse.courseThumbnail = imageUpload.secure_url;

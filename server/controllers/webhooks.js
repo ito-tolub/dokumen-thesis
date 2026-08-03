@@ -8,59 +8,128 @@ import Course from "../models/Course.js";
 //API controller Function
 export const clerkWebhooks = async (req, res) => {
   try {
-    console.log("Received webhook request body:", req.body);
-    
-    const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
+    const signingSecret = process.env.CLERK_WEBHOOK_SECRET;
 
-    const evt = whook.verify(JSON.stringify(req.body), {
-      "svix-id": req.headers["svix-id"],
-      "svix-timestamp": req.headers["svix-timestamp"],
-      "svix-signature": req.headers["svix-signature"],
+    if (!signingSecret) {
+      console.error("CLERK_WEBHOOK_SECRET belum dikonfigurasi");
+      return res.status(500).json({
+        success: false,
+        message: "Webhook secret belum dikonfigurasi",
+      });
+    }
+
+    const svixId = req.headers["svix-id"];
+    const svixTimestamp = req.headers["svix-timestamp"];
+    const svixSignature = req.headers["svix-signature"];
+
+    if (!svixId || !svixTimestamp || !svixSignature) {
+      return res.status(400).json({
+        success: false,
+        message: "Header Svix tidak lengkap",
+      });
+    }
+
+    // express.raw() menghasilkan Buffer
+    const payload = req.body.toString("utf8");
+
+    const webhook = new Webhook(signingSecret);
+
+    const event = webhook.verify(payload, {
+      "svix-id": svixId,
+      "svix-timestamp": svixTimestamp,
+      "svix-signature": svixSignature,
     });
 
-    console.log("Received event:", evt);
-    const { data, type } = evt;
+    const { type, data } = event;
+
+    console.log("Clerk webhook diterima:", type);
+    console.log("Clerk user ID:", data.id);
 
     switch (type) {
       case "user.created": {
-        const userData = {
-          _id: data.id,
-          email: data.email_addresses[0].email_address,
-          name: data.first_name + " " + data.last_name,
-          imageUrl: data.image_url,
-        }
-        console.log("User data to be saved:", userData);
-        await User.create(userData)
-        res.json({})
+        const primaryEmail =
+          data.email_addresses?.find(
+            (email) => email.id === data.primary_email_address_id
+          )?.email_address ??
+          data.email_addresses?.[0]?.email_address;
+
+        await User.findByIdAndUpdate(
+          data.id,
+          {
+            name:
+              [data.first_name, data.last_name].filter(Boolean).join(" ") ||
+              "Pengguna",
+            email: primaryEmail,
+            imageUrl: data.image_url,
+          },
+          {
+            upsert: true,
+            new: true,
+            setDefaultsOnInsert: true,
+          }
+        );
+
         break;
       }
 
       case "user.updated": {
-        const userData = {
-          email: data.email_address[0].email_address,
-          name: data.first_name + " " + data.last_name,
-          imageUrl: data.image_url,
-        }
-        await User.findByIdAndUpdate(data.id, userData)
-        res.json({})
+        const primaryEmail =
+          data.email_addresses?.find(
+            (email) => email.id === data.primary_email_address_id
+          )?.email_address ??
+          data.email_addresses?.[0]?.email_address;
+
+        await User.findByIdAndUpdate(
+          data.id,
+          {
+            name:
+              [data.first_name, data.last_name].filter(Boolean).join(" ") ||
+              "Pengguna",
+            email: primaryEmail,
+            imageUrl: data.image_url,
+          },
+          {
+            new: true,
+            runValidators: true,
+          }
+        );
+
         break;
       }
 
       case "user.deleted": {
-        await User.findByIdAndDelete(data.id)
-        res.json({})
+        const deletedUser = await User.findByIdAndDelete(data.id);
+
+        if (deletedUser) {
+          console.log(
+            `User ${data.id} berhasil dihapus dari MongoDB`
+          );
+        } else {
+          console.log(
+            `User ${data.id} tidak ditemukan di MongoDB`
+          );
+        }
+
         break;
       }
 
-      default:
+      default: {
+        console.log(`Event Clerk tidak ditangani: ${type}`);
         break;
+      }
     }
 
-    // res.json({ success: true });
-
+    return res.status(200).json({
+      success: true,
+      received: true,
+    });
   } catch (error) {
-    console.error("Webhook error:", error.message);
-    res.status(400).json({ success: false });
+    console.error("Clerk webhook error:", error);
+
+    return res.status(400).json({
+      success: false,
+      message: "Verifikasi atau pemrosesan webhook gagal",
+    });
   }
 };
 
