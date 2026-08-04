@@ -471,7 +471,7 @@ const ClassCard = ({ course, isEnrolled, isEnrolling, onTakeCourse }) => {
           <div className="mt-2.5 pt-2.5 border-t border-gray-50">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] text-gray-500">
-                Kehadiran: {hadir} dari {totalSesi} sesi
+                Kehadiran: {hadir} dari {totalSesi} pertemuan
               </span>
 
               <span

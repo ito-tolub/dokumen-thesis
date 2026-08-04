@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState, useRef } from "react";
 import { AppContext } from "../../context/AppContext";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import humanizeDuration from "humanize-duration";
+// import humanizeDuration from "humanize-duration";
 import YouTube from "react-youtube";
 import Footer from "../../components/student/Footer";
 import axios from "axios";
@@ -413,8 +413,6 @@ const Player = () => {
       );
     }
 
-    // HTML interaktif (quiz, simulasi) — Cloudinary raw atau ekstensi .html
-    // HTML interaktif (quiz, simulasi)
     if (url.match(/\.html/i) || url.includes("/raw/upload/")) {
       return <HtmlPlayer url={url} title={playerData.lectureTitle} />;
     }
@@ -533,7 +531,7 @@ const Player = () => {
         <div className="md:w-72 w-full bg-white border-r border-gray-200 flex-shrink-0 shadow-sm">
           <div className="p-4 border-b border-gray-100">
             <h2 className="font-semibold text-gray-800 text-sm">
-              Daftar Objek Pembelajaran
+              Daftar Pertemuan
             </h2>
             <p className="text-xs text-gray-400 mt-0.5 truncate">
               {courseData.courseTitle}
@@ -570,12 +568,12 @@ const Player = () => {
                 </p>
                 <div className="flex items-center gap-2 mt-1">
                   <p className="text-xs text-gray-400">
-                    {chapter.chapterContent.length} objek
+                    {chapter.chapterContent.length} Objek Pembelajaran
                   </p>
                   <span className="text-gray-300">·</span>
-                  <p className="text-xs text-gray-400">
+                  {/* <p className="text-xs text-gray-400">
                     {calculateChapterTime(chapter)}
-                  </p>
+                  </p> */}
                 </div>
               </div>
             ))}
@@ -593,8 +591,8 @@ const Player = () => {
               )}
             </h1>
             <p className="text-sm text-gray-400 mt-1">
-              {currentChapter?.chapterContent.length} objek pembelajaran ·{" "}
-              {calculateChapterTime(currentChapter)}
+              {currentChapter?.chapterContent.length} objek pembelajaran{" "}
+              {/* {calculateChapterTime(currentChapter)} */}
             </p>
           </div>
 
@@ -673,10 +671,10 @@ const Player = () => {
                       {varkLabel[dominantSet[0] || "V"]}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  {/* <p className="text-xs text-gray-500 mt-0.5">
                     Top-3 objek pembelajaran dengan kecocokan VARK tertinggi
                     berdasarkan cosine similarity
-                  </p>
+                  </p> */}
                 </div>
               </div>
 
@@ -703,14 +701,14 @@ const Player = () => {
                       <p className="text-sm font-medium text-gray-800 truncate">
                         {lecture.lectureTitle}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      {/* <p className="text-xs text-gray-400">
                         {humanizeDuration(lecture.lectureDuration * 60 * 1000, {
                           units: ["h", "m"],
                         })}
-                      </p>
-                      <p className="text-xs text-blue-600 font-medium mt-1">
+                      </p> */}
+                      {/* <p className="text-xs text-blue-600 font-medium mt-1">
                         Kecocokan VARK: {lecture.similarityPercentage}%
-                      </p>
+                      </p> */}
                       <p className="text-xs text-blue-600">
                         Hybrid Score:
                         {lecture._hybridPercentage}%
@@ -786,12 +784,12 @@ const Player = () => {
                       <p className="text-sm font-medium text-gray-700 truncate">
                         {lecture.lectureTitle}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      {/* <p className="text-xs text-gray-400">
                         {varkLabel[normalizeVark(lecture.tags)]} ·{" "}
                         {humanizeDuration(lecture.lectureDuration * 60 * 1000, {
                           units: ["h", "m"],
                         })}
-                      </p>
+                      </p> */}
                       <p className="text-xs text-blue-600">
                         Hybrid Score:
                         {lecture._hybridPercentage}%
