@@ -74,6 +74,7 @@ export const getUserData = async (req, res) => {
       samapta: keprajaan?.samapta ?? null,
       nilaiAkhir: keprajaan?.nilaiAkhir ?? null,
       namaKeprajaan: keprajaan?.nama ?? null,
+      kelas: keprajaan?.kelas ?? null,
     };
 
     res.json({ success: true, user: userWithKeprajaan });
@@ -129,6 +130,7 @@ export const saveNpp = async (req, res) => {
         samapta: keprajaan.samapta,
         nilaiAkhir: keprajaan.nilaiAkhir,
         namaKeprajaan: keprajaan.nama,
+        kelas: keprajaan.kelas,
       },
     });
   } catch (error) {
@@ -145,114 +147,96 @@ export const userEnrolledCourses = async (req, res) => {
 
     // Kumpulkan NIP educator, ambil namanya dari koleksi pegawai
     // Normalisasi educator agar data lama dan data baru tetap didukung
-const normalizeEducatorNips = (educator) => {
-  if (Array.isArray(educator)) {
-    return educator
-      .map((nip) => String(nip).trim())
-      .filter(Boolean);
-  }
+    const normalizeEducatorNips = (educator) => {
+      if (Array.isArray(educator)) {
+        return educator.map((nip) => String(nip).trim()).filter(Boolean);
+      }
 
-  return String(educator || "")
-    .split(/[\s,]+/)
-    .map((nip) => nip.trim())
-    .filter(Boolean);
-};
-
-// Ambil seluruh NIP dari seluruh mata kuliah
-const nips = [
-  ...new Set(
-    courses.flatMap((course) =>
-      normalizeEducatorNips(course.educator)
-    )
-  ),
-];
-
-// Cari seluruh dosen berdasarkan NIP
-const pegawaiList = await Pegawai.find({
-  nip: {
-    $in: nips,
-  },
-})
-  .select("nip nama jabatan unit_kerja")
-  .lean();
-
-// Buat indeks pegawai berdasarkan NIP
-const pegawaiByNip = new Map(
-  pegawaiList.map((pegawai) => [
-    String(pegawai.nip),
-    pegawai,
-  ])
-);
-
-const enriched = await Promise.all(
-  courses.map(async (course) => {
-    const obj = course.toObject
-      ? course.toObject()
-      : course;
-
-    const educatorNips =
-      normalizeEducatorNips(obj.educator);
-
-    const pengajar = educatorNips
-      .map((nip) => pegawaiByNip.get(nip))
-      .filter(Boolean);
-
-    const totalSesi = Array.isArray(obj.courseContent)
-      ? obj.courseContent.length
-      : 0;
-
-    const progress = await CourseProgress.findOne({
-      userId,
-      courseId: obj._id.toString(),
-    }).lean();
-
-    const completedSet = new Set(
-      progress?.lectureCompleted || []
-    );
-
-    const hadir = (obj.courseContent || []).reduce(
-      (total, chapter) => {
-        const lectures = Array.isArray(
-          chapter.chapterContent
-        )
-          ? chapter.chapterContent
-          : [];
-
-        const chapterSelesai = lectures.some(
-          (lecture) =>
-            completedSet.has(lecture.lectureId)
-        );
-
-        return total + (chapterSelesai ? 1 : 0);
-      },
-      0
-    );
-
-    return {
-      ...obj,
-
-      // Pastikan frontend selalu menerima array NIP
-      educator: educatorNips,
-
-      // Frontend menerima array data dosen
-      pengajar,
-
-      // Tetap disediakan untuk kompatibilitas kode lama
-      pengajarNama:
-        obj.pengajarNama ||
-        pengajar
-          .map((dosen) => dosen.nama)
-          .filter(Boolean)
-          .join(", ") ||
-        null,
-
-      kehadiran: {
-        hadir,
-        totalSesi,
-      },
+      return String(educator || "")
+        .split(/[\s,]+/)
+        .map((nip) => nip.trim())
+        .filter(Boolean);
     };
-  })
-);
+
+    // Ambil seluruh NIP dari seluruh mata kuliah
+    const nips = [
+      ...new Set(
+        courses.flatMap((course) => normalizeEducatorNips(course.educator)),
+      ),
+    ];
+
+    // Cari seluruh dosen berdasarkan NIP
+    const pegawaiList = await Pegawai.find({
+      nip: {
+        $in: nips,
+      },
+    })
+      .select("nip nama jabatan unit_kerja")
+      .lean();
+
+    // Buat indeks pegawai berdasarkan NIP
+    const pegawaiByNip = new Map(
+      pegawaiList.map((pegawai) => [String(pegawai.nip), pegawai]),
+    );
+
+    const enriched = await Promise.all(
+      courses.map(async (course) => {
+        const obj = course.toObject ? course.toObject() : course;
+
+        const educatorNips = normalizeEducatorNips(obj.educator);
+
+        const pengajar = educatorNips
+          .map((nip) => pegawaiByNip.get(nip))
+          .filter(Boolean);
+
+        const totalSesi = Array.isArray(obj.courseContent)
+          ? obj.courseContent.length
+          : 0;
+
+        const progress = await CourseProgress.findOne({
+          userId,
+          courseId: obj._id.toString(),
+        }).lean();
+
+        const completedSet = new Set(progress?.lectureCompleted || []);
+
+        const hadir = (obj.courseContent || []).reduce((total, chapter) => {
+          const lectures = Array.isArray(chapter.chapterContent)
+            ? chapter.chapterContent
+            : [];
+
+          const chapterSelesai = lectures.some((lecture) =>
+            completedSet.has(lecture.lectureId),
+          );
+
+          return total + (chapterSelesai ? 1 : 0);
+        }, 0);
+
+        return {
+          ...obj,
+
+          // Pastikan frontend selalu menerima array NIP
+          educator: educatorNips,
+
+          // Frontend menerima array data dosen
+          pengajar,
+
+          // Tetap disediakan untuk kompatibilitas kode lama
+          pengajarNama:
+            obj.pengajarNama ||
+            pengajar
+              .map((dosen) => dosen.nama)
+              .filter(Boolean)
+              .join(", ") ||
+            null,
+
+          kehadiran: {
+            hadir,
+            totalSesi,
+          },
+        };
+      }),
+    );
 
     res.json({ success: true, enrolledCourses: enriched });
   } catch (error) {

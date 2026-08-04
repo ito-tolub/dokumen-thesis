@@ -7,6 +7,7 @@ import Footer from "../../components/student/Footer";
 import axios from "axios";
 import { toast } from "react-toastify";
 import Loading from "../../components/student/Loading";
+import { renderAsync } from "docx-preview";
 
 const HYBRID_WEIGHT = {
   vark: 0.7,
@@ -86,6 +87,658 @@ const varkColor = {
     text: "text-rose-700",
     badge: "bg-rose-500",
   },
+};
+
+
+const getYouTubeId = (url) => {
+  try {
+    if (!url) return null;
+
+    if (url.includes("youtu.be/")) {
+      return url.split("youtu.be/")[1]?.split(/[?&]/)[0] || null;
+    }
+
+    const parsedUrl = new URL(url);
+
+    if (parsedUrl.hostname.includes("youtube.com")) {
+      return (
+        parsedUrl.searchParams.get("v") ||
+        parsedUrl.pathname.split("/").filter(Boolean).pop() ||
+        null
+      );
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
+const getLectureType = (lecture) => {
+  const url = String(lecture?.lectureUrl || "").toLowerCase();
+
+  if (url.includes("youtube.com") || url.includes("youtu.be")) {
+    return { label: "Video", icon: "▶️" };
+  }
+  if (/\.(mp3|wav|ogg|m4a)(\?|$)/i.test(url)) {
+    return { label: "Audio", icon: "🎧" };
+  }
+  if (/\.pdf(\?|$)/i.test(url)) {
+    return { label: "PDF", icon: "📕" };
+  }
+  if (/\.docx?(\?|$)/i.test(url)) {
+    return { label: "Dokumen", icon: "📘" };
+  }
+  if (/\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(url)) {
+    return { label: "Video", icon: "🎬" };
+  }
+  if (/\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) {
+    return { label: "Gambar", icon: "🖼️" };
+  }
+  if (/\.html?(\?|$)/i.test(url) || url.includes("/raw/upload/")) {
+    return { label: "Interaktif", icon: "🧩" };
+  }
+
+  return { label: "Materi", icon: "📚" };
+};
+
+
+const getCloudinaryPdfThumbnail = (url) => {
+  const value = String(url || "");
+
+  if (
+    !value.includes("res.cloudinary.com") ||
+    !value.includes("/image/upload/") ||
+    !/\.pdf(?:[?#].*)?$/i.test(value)
+  ) {
+    return null;
+  }
+
+  const [beforeUpload, afterUpload] = value.split("/image/upload/");
+
+  if (!beforeUpload || !afterUpload) return null;
+
+  const cleanAssetPath = afterUpload
+    .split("#")[0]
+    .split("?")[0]
+    .replace(/\.pdf$/i, ".jpg");
+
+  return `${beforeUpload}/image/upload/pg_1,w_900,c_limit,q_auto,f_jpg/${cleanAssetPath}`;
+};
+
+const buildGoogleDocumentPreviewUrl = (url) =>
+  `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}`;
+
+const getPreviewVideoUrl = (url) => {
+  const value = String(url || "");
+
+  if (
+    value.includes("cloudinary.com") &&
+    value.includes("/image/upload/")
+  ) {
+    return value.replace("/image/upload/", "/video/upload/");
+  }
+
+  return value;
+};
+
+const PreviewFallback = ({
+  type,
+  message = "Pratinjau tidak tersedia",
+}) => (
+  <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-gray-50 to-gray-200 px-4 text-center">
+    <span className="text-5xl">{type.icon}</span>
+    <p className="text-xs font-medium text-gray-500">{message}</p>
+  </div>
+);
+
+const PreviewImage = ({ src, alt, type }) => {
+  const [failed, setFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (!src || failed) {
+    return (
+      <PreviewFallback
+        type={type}
+        message="Gambar pratinjau gagal dimuat"
+      />
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="h-full w-full object-cover"
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+};
+
+
+const DocxCardPreview = ({ url, title, type }) => {
+  const viewportRef = React.useRef(null);
+  const bodyRef = React.useRef(null);
+  const styleRef = React.useRef(null);
+  const [shouldLoad, setShouldLoad] = React.useState(false);
+  const [status, setStatus] = React.useState("idle");
+
+  // DOCX cukup dimuat ketika kartunya mendekati area layar.
+  React.useEffect(() => {
+    const viewport = viewportRef.current;
+
+    if (!viewport) return undefined;
+
+    if (!("IntersectionObserver" in window)) {
+      setShouldLoad(true);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      {
+        rootMargin: "250px",
+        threshold: 0.01,
+      },
+    );
+
+    observer.observe(viewport);
+
+    return () => observer.disconnect();
+  }, []);
+
+  React.useEffect(() => {
+    if (!shouldLoad || !url) return undefined;
+
+    const controller = new AbortController();
+    let disposed = false;
+
+    const renderDocument = async () => {
+      setStatus("loading");
+
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          mode: "cors",
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const documentBlob = await response.blob();
+
+        if (
+          disposed ||
+          !bodyRef.current ||
+          !styleRef.current ||
+          !viewportRef.current
+        ) {
+          return;
+        }
+
+        bodyRef.current.innerHTML = "";
+        styleRef.current.innerHTML = "";
+
+        await renderAsync(
+          documentBlob,
+          bodyRef.current,
+          styleRef.current,
+          {
+            className: "docx-card",
+            inWrapper: true,
+            breakPages: true,
+            ignoreLastRenderedPageBreak: false,
+            ignoreFonts: true,
+            renderHeaders: false,
+            renderFooters: false,
+            renderFootnotes: false,
+            renderEndnotes: false,
+            useBase64URL: true,
+          },
+        );
+
+        if (disposed || !bodyRef.current || !viewportRef.current) {
+          return;
+        }
+
+        const pages = Array.from(
+          bodyRef.current.querySelectorAll("section"),
+        );
+
+        // Kartu hanya menampilkan halaman pertama.
+        pages.slice(1).forEach((page) => {
+          page.style.display = "none";
+        });
+
+        const firstPage = pages[0] || bodyRef.current.firstElementChild;
+
+        if (firstPage) {
+          firstPage.style.margin = "0";
+          firstPage.style.boxShadow = "none";
+
+          const pageWidth =
+            firstPage.scrollWidth ||
+            firstPage.getBoundingClientRect().width ||
+            816;
+
+          const viewportWidth =
+            viewportRef.current.clientWidth || 320;
+
+          const scale = Math.min(
+            1,
+            Math.max(0.2, viewportWidth / pageWidth),
+          );
+
+          bodyRef.current.style.transformOrigin = "top left";
+          bodyRef.current.style.transform = `scale(${scale})`;
+          bodyRef.current.style.width = `${100 / scale}%`;
+        }
+
+        setStatus("success");
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          console.error(
+            `Gagal menampilkan preview DOCX "${title || ""}":`,
+            error,
+          );
+          setStatus("error");
+        }
+      }
+    };
+
+    renderDocument();
+
+    return () => {
+      disposed = true;
+      controller.abort();
+    };
+  }, [shouldLoad, title, url]);
+
+  return (
+    <div
+      ref={viewportRef}
+      className="relative h-full w-full overflow-hidden bg-white"
+    >
+      <div ref={styleRef} />
+
+      {!shouldLoad || status === "idle" || status === "loading" ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+          <p className="text-xs font-medium text-gray-400">
+            Memuat dokumen...
+          </p>
+        </div>
+      ) : null}
+
+      {status === "error" ? (
+        <PreviewFallback
+          type={type}
+          message="Pratinjau DOCX gagal dimuat"
+        />
+      ) : null}
+
+      <div
+        ref={bodyRef}
+        className={
+          status === "success"
+            ? "pointer-events-none block bg-white"
+            : "pointer-events-none invisible"
+        }
+      />
+    </div>
+  );
+};
+
+
+const addBaseUrlToHtml = (html, sourceUrl) => {
+  try {
+    const baseUrl = new URL(".", sourceUrl).href;
+    const baseTag = `<base href="${baseUrl}" />`;
+
+    if (/<head[^>]*>/i.test(html)) {
+      return html.replace(/<head([^>]*)>/i, `<head$1>${baseTag}`);
+    }
+
+    return `<!doctype html>
+      <html>
+        <head>${baseTag}</head>
+        <body>${html}</body>
+      </html>`;
+  } catch {
+    return html;
+  }
+};
+
+const HtmlCardPreview = ({ url, title, type }) => {
+  const [htmlContent, setHtmlContent] = React.useState("");
+  const [status, setStatus] = React.useState("loading");
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+
+    setStatus("loading");
+    setHtmlContent("");
+
+    fetch(url, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        return response.text();
+      })
+      .then((html) => {
+        setHtmlContent(addBaseUrlToHtml(html, url));
+        setStatus("success");
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") {
+          console.error("Gagal memuat preview HTML:", error);
+          setStatus("error");
+        }
+      });
+
+    return () => controller.abort();
+  }, [url]);
+
+  if (status === "loading") {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-gray-50">
+        <p className="text-xs font-medium text-gray-400">
+          Memuat pratinjau...
+        </p>
+      </div>
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <PreviewFallback
+        type={type}
+        message="Pratinjau interaktif gagal dimuat"
+      />
+    );
+  }
+
+  return (
+    <iframe
+      srcDoc={htmlContent}
+      title={`Pratinjau interaktif ${title || ""}`}
+      className="h-full w-full border-0 pointer-events-none bg-white"
+      sandbox="allow-scripts allow-same-origin allow-forms"
+    />
+  );
+};
+
+const LecturePreview = ({ lecture, showVarkBadge = true }) => {
+  const url = String(lecture?.lectureUrl || "");
+  const type = getLectureType(lecture);
+  const youtubeId = getYouTubeId(url);
+  const pdfThumbnail = getCloudinaryPdfThumbnail(url);
+
+  const isPdf = /\.pdf(?:[?#].*)?$/i.test(url);
+  const isDocument = /\.docx?(?:[?#].*)?$/i.test(url);
+
+  const isImage =
+    /\.(png|jpe?g|webp|gif|svg)(?:[?#].*)?$/i.test(url) &&
+    !isPdf;
+
+  const isAudio =
+    /\.(mp3|wav|ogg|m4a)(?:[?#].*)?$/i.test(url) ||
+    (
+      url.includes("/video/upload/") &&
+      normalizeVark(lecture?.tags) === "A"
+    );
+
+  const isVideo =
+    Boolean(youtubeId) ||
+    /\.(mp4|webm|mov|avi|mkv)(?:[?#].*)?$/i.test(url) ||
+    (
+      url.includes("/video/upload/") &&
+      !isAudio
+    );
+
+  const isHtml =
+    /\.html?(?:[?#].*)?$/i.test(url) ||
+    (
+      url.includes("/raw/upload/") &&
+      !isDocument &&
+      !isAudio
+    );
+
+  const previewBody = (() => {
+    if (!url) {
+      return (
+        <PreviewFallback
+          type={type}
+          message="Konten belum tersedia"
+        />
+      );
+    }
+
+    if (youtubeId) {
+      return (
+        <PreviewImage
+          src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
+          alt={`Pratinjau ${lecture?.lectureTitle || "video"}`}
+          type={type}
+        />
+      );
+    }
+
+    if (isPdf && pdfThumbnail) {
+      return (
+        <PreviewImage
+          src={pdfThumbnail}
+          alt={`Halaman pertama ${lecture?.lectureTitle || "PDF"}`}
+          type={type}
+        />
+      );
+    }
+
+    if (isPdf) {
+      return (
+        <iframe
+          src={buildGoogleDocumentPreviewUrl(url)}
+          title={`Pratinjau PDF ${lecture?.lectureTitle || ""}`}
+          className="h-full w-full border-0 pointer-events-none bg-white"
+          loading="lazy"
+        />
+      );
+    }
+
+    if (isDocument) {
+      return (
+        <DocxCardPreview
+          url={url}
+          title={lecture?.lectureTitle}
+          type={type}
+        />
+      );
+    }
+
+    if (isImage) {
+      return (
+        <PreviewImage
+          src={url}
+          alt={`Pratinjau ${lecture?.lectureTitle || "gambar"}`}
+          type={type}
+        />
+      );
+    }
+
+    if (isAudio) {
+      return (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-amber-50 to-orange-100 px-5 text-center">
+          <span className="text-5xl">🎧</span>
+
+          <p className="text-xs font-semibold text-gray-700">
+            Audio pembelajaran
+          </p>
+
+          <p className="text-[11px] text-gray-500">
+            Buka Review untuk mendengarkan
+          </p>
+        </div>
+      );
+    }
+
+    if (isVideo) {
+      return (
+        <video
+          src={getPreviewVideoUrl(url)}
+          muted
+          playsInline
+          preload="metadata"
+          className="h-full w-full object-cover pointer-events-none bg-black"
+          onLoadedMetadata={(event) => {
+            try {
+              const video = event.currentTarget;
+              video.currentTime = Math.min(
+                1,
+                Math.max(0, (video.duration || 1) * 0.05),
+              );
+            } catch {
+              // Browser tertentu tidak mengizinkan seek otomatis.
+            }
+          }}
+        />
+      );
+    }
+
+    if (isHtml) {
+      return (
+        <HtmlCardPreview
+          url={url}
+          title={lecture?.lectureTitle}
+          type={type}
+        />
+      );
+    }
+
+    return (
+      <PreviewFallback
+        type={type}
+        message="Format tidak mendukung pratinjau langsung"
+      />
+    );
+  })();
+
+  return (
+    <div className="relative aspect-[16/10] overflow-hidden rounded-xl border border-gray-200 bg-white">
+      {previewBody}
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/70 via-black/30 to-transparent px-3 pb-3 pt-8">
+        <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-gray-700 backdrop-blur-sm">
+          {type.icon} {type.label}
+        </span>
+
+        {showVarkBadge && (
+          <span className="rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+            {varkLabel[normalizeVark(lecture?.tags)] || "Umum"}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
+const LectureCard = ({
+  lecture,
+  onReview,
+  isActive,
+  isCompleted,
+  recommendationEnabled,
+  isRecommended = false,
+  rank = null,
+}) => {
+  const modality = normalizeVark(lecture?.tags);
+  const lectureType = getLectureType(lecture);
+  const headerIcon = recommendationEnabled
+    ? varkEmoji[modality] || lectureType.icon
+    : lectureType.icon;
+  const hybridScore = Number(lecture?._hybridPercentage);
+  const hasHybridScore =
+    recommendationEnabled && Number.isFinite(hybridScore);
+
+  return (
+    <article
+      onClick={() => onReview(lecture)}
+      className={`group cursor-pointer rounded-2xl border p-3 transition-all duration-200 ${
+        isActive
+          ? "border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-100"
+          : isRecommended
+            ? "border-blue-200 bg-slate-100 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
+            : "border-gray-200 bg-slate-100 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md"
+      }`}
+    >
+      <div className="flex items-start gap-2 px-1 pb-3">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-white shadow-sm">
+          <span className="text-base">{headerIcon}</span>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p
+            className="truncate text-sm font-semibold text-gray-800"
+            title={lecture?.lectureTitle}
+          >
+            {lecture?.lectureTitle}
+          </p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            Objek pembelajaran
+          </p>
+        </div>
+
+        {isRecommended && (
+          <span className="rounded-full bg-blue-600 px-2 py-1 text-[10px] font-bold text-white">
+            #{rank}
+          </span>
+        )}
+      </div>
+
+      <LecturePreview
+        lecture={lecture}
+        showVarkBadge={recommendationEnabled}
+      />
+
+      <div className="flex items-center justify-between gap-3 px-1 pt-3">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onReview(lecture);
+          }}
+          className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm ring-1 ring-gray-200 transition hover:bg-blue-600 hover:text-white hover:ring-blue-600"
+        >
+          Review
+        </button>
+
+        <div className="flex min-w-0 items-center gap-2">
+          {hasHybridScore && (
+            <span className="truncate rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+              Hybrid {hybridScore.toFixed(2)}%
+            </span>
+          )}
+
+          {isCompleted && (
+            <span className="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">
+              ✓ Selesai
+            </span>
+          )}
+        </div>
+      </div>
+    </article>
+  );
 };
 
 const HtmlPlayer = ({ url, title }) => {
@@ -170,6 +823,13 @@ const Player = () => {
     userData,
     fetUserEnrolledCourses,
   } = useContext(AppContext);
+
+  const userClass = String(userData?.kelas || "")
+    .trim()
+    .toUpperCase();
+  
+  const recommendationEnabled = userClass === "G2";
+
   const { courseId } = useParams();
   const [searchParams] = useSearchParams();
   const sesiParam = parseInt(searchParams.get("sesi"), 10);
@@ -478,51 +1138,122 @@ const Player = () => {
     };
   };
 
-  const scoredLectures = lectures
-  .filter((lecture) => lecture.varkvektor)
-  .map((lecture) => {
-    const result = scoreLecture(lecture);
-    return {
-      ...lecture,
-      _varkSimilarity:
-        result.varkSimilarity,
-      _instructionalCompatibility:
-        result.instructionalCompatibility,
-      _hybridScore:
-        result.hybridScore,
-      _hybridPercentage:
-        result.hybridPercentage,
-    };
-  })
-  .sort(
-    (a, b) =>
-      b._hybridScore -
-      a._hybridScore
-  );
+  // Menyimpan indeks asli agar setiap objek tetap dapat dibedakan,
+  // termasuk jika terdapat lectureId yang sama.
+  const lecturesWithIndex = lectures.map((lecture, index) => ({
+    ...lecture,
+    _sourceIndex: index,
+  }));
 
+  // Urutan netral berdasarkan lectureOrder.
+  // Jika lectureOrder sama, gunakan urutan asli dalam array.
+  const orderedLectures = [...lecturesWithIndex].sort((a, b) => {
+    const orderA = Number(a.lectureOrder ?? a._sourceIndex);
+    const orderB = Number(b.lectureOrder ?? b._sourceIndex);
+
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+
+    return a._sourceIndex - b._sourceIndex;
+  });
+
+  // Scoring hanya dilakukan untuk G2 dan hanya jika profil VARK tersedia.
+  const scoredLectures =
+    recommendationEnabled && userVarkVector
+      ? lecturesWithIndex
+          .filter((lecture) => lecture.varkvektor)
+          .map((lecture) => {
+            const result = scoreLecture(lecture);
+
+            return {
+              ...lecture,
+              _varkSimilarity: result.varkSimilarity,
+              _instructionalCompatibility: result.instructionalCompatibility,
+              _hybridScore: result.hybridScore,
+              _hybridPercentage: result.hybridPercentage,
+            };
+          })
+          .sort((a, b) => {
+            if (b._hybridScore !== a._hybridScore) {
+              return b._hybridScore - a._hybridScore;
+            }
+
+            return a._sourceIndex - b._sourceIndex;
+          })
+      : [];
+
+  if (recommendationEnabled) {
   console.log(
-    "VARK recommendation ranking:",
+    "Hybrid recommendation ranking:",
     scoredLectures.map((lecture) => ({
       title: lecture.lectureTitle,
       varkvektor: lecture.varkvektor,
-      similarity: lecture._similarity,
-      score: lecture._score,
+      varkSimilarity: lecture._varkSimilarity,
+      instructionalCompatibility:
+        lecture._instructionalCompatibility,
+      hybridScore: lecture._hybridScore,
+      hybridPercentage: lecture._hybridPercentage,
     })),
   );
+}
 
-  // Top-1 rekomendasi
-  const rekomendasiAkhir = scoredLectures.slice(0, 3).map((lecture, index) => ({
-    ...lecture,
-    rank: index + 1,
-    similarityPercentage: (lecture._similarity * 100).toFixed(2),
-  }));
+  // Tiga objek dengan hybrid score tertinggi hanya untuk G2.
+  const rekomendasiAkhir = recommendationEnabled
+    ? scoredLectures.slice(0, 3).map((lecture, index) => ({
+        ...lecture,
+        rank: index + 1,
+        similarityPercentage: Number(
+          (lecture._varkSimilarity * 100).toFixed(2),
+        ),
+      }))
+    : [];
 
-  // Sisanya tampil di "Objek Pembelajaran Lainnya"
-  const lecturesLain = scoredLectures.slice(1);
+  // Gunakan indeks sumber, bukan lectureId, karena data masih mungkin
+  // mempunyai lectureId yang sama.
+  const recommendedIndexes = new Set(
+    rekomendasiAkhir.map((lecture) => lecture._sourceIndex),
+  );
+
+  // Gabungkan kembali metadata skor agar kartu G2 dapat menampilkan hybrid score.
+  const scoredLectureByIndex = new Map(
+    scoredLectures.map((lecture) => [lecture._sourceIndex, lecture]),
+  );
+
+  const orderedLecturesWithScore = orderedLectures.map(
+    (lecture) => scoredLectureByIndex.get(lecture._sourceIndex) || lecture,
+  );
+
+  // G1: seluruh objek dalam urutan asli, tanpa scoring.
+  // G2: objek rekomendasi dikeluarkan dari daftar objek lainnya.
+  const lecturesLain = recommendationEnabled
+    ? orderedLecturesWithScore.filter(
+        (lecture) => !recommendedIndexes.has(lecture._sourceIndex),
+      )
+    : orderedLectures;
 
   const colors =
     varkColor[normalizeVark(rekomendasiAkhir[0]?.tags)] || varkColor["V"];
   const isCompleted = (id) => progressData?.lectureCompleted?.includes(id);
+
+  const displayedLectures = recommendationEnabled
+    ? showAllLectures
+      ? lecturesLain
+      : lecturesLain.slice(0, 6)
+    : lecturesLain;
+
+  const isSameLecture = (lecture) => {
+    if (!playerData || !lecture) return false;
+
+    if (
+      Number.isInteger(playerData._sourceIndex) &&
+      Number.isInteger(lecture._sourceIndex)
+    ) {
+      return playerData._sourceIndex === lecture._sourceIndex;
+    }
+
+    return playerData.lectureId === lecture.lectureId;
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -570,10 +1301,7 @@ const Player = () => {
                   <p className="text-xs text-gray-400">
                     {chapter.chapterContent.length} Objek Pembelajaran
                   </p>
-                  <span className="text-gray-300">·</span>
-                  {/* <p className="text-xs text-gray-400">
-                    {calculateChapterTime(chapter)}
-                  </p> */}
+                  {/* Durasi sengaja tidak ditampilkan di sidebar. */}
                 </div>
               </div>
             ))}
@@ -610,11 +1338,8 @@ const Player = () => {
                       {playerData.lectureTitle}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {varkLabel[normalizeVark(playerData.tags)]} ·{" "}
-                      {humanizeDuration(
-                        playerData.lectureDuration * 60 * 1000,
-                        { units: ["h", "m"] },
-                      )}
+                      {varkLabel[normalizeVark(playerData.tags)] ||
+                        "Objek Pembelajaran"}
                     </p>
                   </div>
                 </div>
@@ -647,7 +1372,7 @@ const Player = () => {
           )}
 
           {/* ── Rekomendasi Objek Pembelajaran ── */}
-          {rekomendasiAkhir.length > 0 && (
+          {recommendationEnabled && rekomendasiAkhir.length > 0 && (
             <div
               className={`mb-6 rounded-2xl border-2 ${colors.border} ${colors.bg} p-4`}
             >
@@ -678,62 +1403,26 @@ const Player = () => {
                 </div>
               </div>
 
-              {/* Daftar rekomendasi */}
-              <div className="space-y-2">
-                {rekomendasiAkhir.map((lecture, i) => (
-                  <div
-                    key={i}
-                    onClick={() => setPlayerData(lecture)}
-                    className={`flex items-center gap-3 p-3 rounded-xl bg-white cursor-pointer transition-all shadow-sm border ${
-                      playerData?.lectureId === lecture.lectureId
-                        ? `border-2 ${colors.border} shadow-md`
-                        : "border-gray-100 hover:shadow-md hover:border-gray-200"
-                    }`}
-                  >
-                    <div
-                      className={`w-9 h-9 ${colors.accent} rounded-lg flex items-center justify-center flex-shrink-0`}
-                    >
-                      <span className="text-sm">
-                        {varkEmoji[normalizeVark(lecture.tags)]}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">
-                        {lecture.lectureTitle}
-                      </p>
-                      {/* <p className="text-xs text-gray-400">
-                        {humanizeDuration(lecture.lectureDuration * 60 * 1000, {
-                          units: ["h", "m"],
-                        })}
-                      </p> */}
-                      {/* <p className="text-xs text-blue-600 font-medium mt-1">
-                        Kecocokan VARK: {lecture.similarityPercentage}%
-                      </p> */}
-                      <p className="text-xs text-blue-600">
-                        Hybrid Score:
-                        {lecture._hybridPercentage}%
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {isCompleted(lecture.lectureId) && (
-                        <span className="text-green-500 text-sm font-bold">
-                          ✓
-                        </span>
-                      )}
-                      <span
-                        className={`text-xs text-white px-2 py-0.5 rounded-full ${colors.badge}`}
-                      >
-                        Rekomendasi
-                      </span>
-                    </div>
-                  </div>
+              {/* Kartu rekomendasi bergaya Google Drive */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {rekomendasiAkhir.map((lecture) => (
+                  <LectureCard
+                    key={`recommended-${lecture._sourceIndex}`}
+                    lecture={lecture}
+                    onReview={setPlayerData}
+                    isActive={isSameLecture(lecture)}
+                    isCompleted={isCompleted(lecture.lectureId)}
+                    recommendationEnabled={recommendationEnabled}
+                    isRecommended
+                    rank={lecture.rank}
+                  />
                 ))}
               </div>
             </div>
           )}
 
           {/* Pesan jika tidak ada dominant VARK */}
-          {!userVarkVector && (
+          {recommendationEnabled && !userVarkVector && (
             <div className="mb-6 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 text-center">
               <p className="text-sm text-gray-400">
                 Selesaikan tes VARK untuk mendapatkan rekomendasi personal 🎯
@@ -746,14 +1435,14 @@ const Player = () => {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-gray-700 text-sm">
-                  {rekomendasiAkhir.length > 0
+                  {recommendationEnabled
                     ? "Objek Pembelajaran Lainnya"
                     : "Semua Objek Pembelajaran"}
                 </h3>
-                {lecturesLain.length > 2 && (
+                {recommendationEnabled && lecturesLain.length > 6 && (
                   <button
                     onClick={() => setShowAllLectures(!showAllLectures)}
-                    className="text-xs text-blue-600 hover:underline"
+                    className="text-xs font-medium text-blue-600 hover:underline"
                   >
                     {showAllLectures
                       ? "Tampilkan lebih sedikit"
@@ -761,46 +1450,16 @@ const Player = () => {
                   </button>
                 )}
               </div>
-              <div className="space-y-2">
-                {(showAllLectures
-                  ? lecturesLain
-                  : lecturesLain.slice(0, 2)
-                ).map((lecture, i) => (
-                  <div
-                    key={i}
-                    onClick={() => setPlayerData(lecture)}
-                    className={`flex items-center gap-3 p-3 rounded-xl border bg-white cursor-pointer transition-all ${
-                      playerData?.lectureId === lecture.lectureId
-                        ? "border-gray-400 shadow-sm"
-                        : "border-gray-100 hover:border-gray-200 hover:shadow-sm"
-                    }`}
-                  >
-                    <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <span className="text-base">
-                        {varkEmoji[normalizeVark(lecture.tags)] || "📚"}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-700 truncate">
-                        {lecture.lectureTitle}
-                      </p>
-                      {/* <p className="text-xs text-gray-400">
-                        {varkLabel[normalizeVark(lecture.tags)]} ·{" "}
-                        {humanizeDuration(lecture.lectureDuration * 60 * 1000, {
-                          units: ["h", "m"],
-                        })}
-                      </p> */}
-                      <p className="text-xs text-blue-600">
-                        Hybrid Score:
-                        {lecture._hybridPercentage}%
-                      </p>
-                    </div>
-                    {isCompleted(lecture.lectureId) && (
-                      <span className="text-green-500 text-sm font-bold flex-shrink-0">
-                        ✓
-                      </span>
-                    )}
-                  </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {displayedLectures.map((lecture) => (
+                  <LectureCard
+                    key={`lecture-${lecture._sourceIndex}`}
+                    lecture={lecture}
+                    onReview={setPlayerData}
+                    isActive={isSameLecture(lecture)}
+                    isCompleted={isCompleted(lecture.lectureId)}
+                    recommendationEnabled={recommendationEnabled}
+                  />
                 ))}
               </div>
             </div>

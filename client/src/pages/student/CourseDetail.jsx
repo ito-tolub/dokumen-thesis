@@ -138,19 +138,35 @@ const statusSesi = (tgl) => {
   return "Belum dimulai";
 };
 
+const getLecturerNames = (course) => {
+  const pengajar = course?.pengajar;
+
+  if (Array.isArray(pengajar)) {
+    const names = pengajar
+      .map((dosen) =>
+        typeof dosen === "string" ? dosen : dosen?.nama,
+      )
+      .filter(Boolean);
+
+    if (names.length > 0) return names.join(", ");
+  }
+
+  if (typeof pengajar === "string" && pengajar.trim()) {
+    return pengajar.trim();
+  }
+
+  if (pengajar?.nama) return pengajar.nama;
+  if (course?.pengajarNama) return course.pengajarNama;
+  if (course?.inst) return course.inst;
+
+  return "—";
+};
+
 // Membangun array sesi dari course asli (courseContent + schedule)
 const buildSessions = (course) => {
   const content = course?.courseContent || [];
   const schedule = course?.schedule || {};
-  const lecturer = Array.isArray(selectedCourse?.pengajar)
-  ? selectedCourse.pengajar
-      .map((dosen) => dosen?.nama)
-      .filter(Boolean)
-      .join(', ')
-  : selectedCourse?.pengajar?.nama ||
-    selectedCourse?.pengajarNama ||
-    selectedCourse?.inst ||
-    DEFAULT_COURSE.inst
+  const lecturer = getLecturerNames(course);
 
   return content
     .map((ch, rawIndex) => ({ ch, rawIndex }))
@@ -373,7 +389,8 @@ const RpsTabs = ({ sessions, course }) => {
 
 const stripClassFromTitle = (title = "") =>
   title.replace(/\s*\([^)]*\)\s*$/g, "").trim();
-const getClassCode = (title = "") => title.match(/\(([^)]+)\)/)?.[1] || "G2";
+const getClassCode = (title = "") =>
+  title.match(/\(([^)]+)\)/)?.[1]?.trim() || "";
 
 const ActionShortcut = ({ icon, label, color }) => (
   <button className="cd-shortcut" type="button">
@@ -460,15 +477,6 @@ const DiscussionFeed = ({ courseName, lecturer }) => (
     <AssignmentCard />
   </section>
 );
-
-// const AttendancePanel = ({ kehadiran }) => {
-//   const hadir     = kehadiran?.hadir ?? 0
-//   const totalSesi = kehadiran?.totalSesi ?? 0
-//   const pct       = totalSesi > 0 ? Math.round((hadir / totalSesi) * 100) : 0
-
-//   // ⚠️ Sakit/Izin/Alpa belum ada di skema → 0 (bukan dari DB)
-//   const sakit = 0, izin = 0, alpa = 0
-// }
 
 const RightPanel = ({ kehadiran }) => {
   const hadir = kehadiran?.hadir ?? 0;
@@ -682,21 +690,31 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
     backendUrl,
   } = useContext(AppContext);
   const realCourse = [...enrolledCourses, ...allCourses].find(
-    (c) => c._id === id,
+    (item) => String(item?._id) === String(id),
   );
 
-  const courseTitle = realCourse?.courseTitle || course?.title || "";
-  const courseName = stripClassFromTitle(courseTitle);
-  const classCode = getClassCode(courseTitle);
-  const lecturer =
-    realCourse?.pengajarNama ||
-    realCourse?.pengajar?.nama ||
-    course?.inst ||
+  // Gunakan data dari context sebagai sumber utama, kemudian prop sebagai fallback.
+  const selectedCourse = realCourse || course || null;
+
+  const courseTitle =
+    selectedCourse?.courseTitle ||
+    selectedCourse?.title ||
+    "";
+
+  const courseName =
+    stripClassFromTitle(courseTitle) || "Mata Kuliah";
+
+  const classCode =
+    selectedCourse?.kelas ||
+    getClassCode(courseTitle) ||
     "—";
+
+  const lecturer = getLecturerNames(selectedCourse);
+
   const participants =
-    realCourse?.enrolledStudents?.length ??
-    realCourse?.enrolledCount ??
-    course?.participants ??
+    selectedCourse?.enrolledStudents?.length ??
+    selectedCourse?.enrolledCount ??
+    selectedCourse?.participants ??
     0;
   const [activeMenu, setActiveMenu] = useState("Sesi Pembelajaran");
 
@@ -715,7 +733,7 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
       .catch(() => {})
       .finally(() => setLoadingPeserta(false));
   }, [id, backendUrl]);
-  const sessions = buildSessions({ ...realCourse, inst: lecturer });
+  const sessions = buildSessions(selectedCourse);
 
   return (
     <div className="course-detail-page">
@@ -1470,19 +1488,23 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
 
         <div className="cd-main">
           {activeMenu === "Sesi Pembelajaran" && (
-            <RpsTabs sessions={sessions} course={realCourse} />
+            <RpsTabs sessions={sessions} course={selectedCourse} />
           )}
 
           {activeMenu === "Tugas" && (
             <TugasPanel
-              items={realCourse?.tugas?.length ? realCourse.tugas : DEMO_TUGAS}
+              items={selectedCourse?.tugas?.length ? selectedCourse.tugas : DEMO_TUGAS}
             />
           )}
 
           {activeMenu === "Pengajar & Peserta" && (
             <PengajarPesertaPanel
               lecturer={lecturer}
-              lecturerImg={realCourse?.pengajar?.imageUrl}
+              lecturerImg={
+                Array.isArray(selectedCourse?.pengajar)
+                  ? selectedCourse.pengajar[0]?.imageUrl
+                  : selectedCourse?.pengajar?.imageUrl
+              }
               peserta={peserta}
               loading={loadingPeserta}
             />
@@ -1520,7 +1542,7 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
             )}
         </div>
 
-        <RightPanel kehadiran={realCourse?.kehadiran} />
+        <RightPanel kehadiran={selectedCourse?.kehadiran} />
       </main>
     </div>
   );
