@@ -21,7 +21,6 @@ const MENU_ITEMS = [
   "Berkas",
   "Pengajar & Peserta",
   "Kelompok",
-  "Student Engagement Score (SES)",
 ];
 
 // ⚠️ Data contoh — belum ada di skema. Ganti dengan realCourse.tugas saat field-nya dibuat.
@@ -389,8 +388,21 @@ const RpsTabs = ({ sessions, course }) => {
 
 const stripClassFromTitle = (title = "") =>
   title.replace(/\s*\([^)]*\)\s*$/g, "").trim();
+
+const normalizeClassCode = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
+
+  return ["G1", "G2"].includes(normalized)
+    ? normalized
+    : "";
+};
+
 const getClassCode = (title = "") =>
-  title.match(/\(([^)]+)\)/)?.[1]?.trim() || "";
+  normalizeClassCode(
+    title.match(/\(([^)]+)\)/)?.[1],
+  );
 
 const ActionShortcut = ({ icon, label, color }) => (
   <button className="cd-shortcut" type="button">
@@ -688,6 +700,7 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
     enrolledCourses = [],
     allCourses = [],
     backendUrl,
+    userData,
   } = useContext(AppContext);
   const realCourse = [...enrolledCourses, ...allCourses].find(
     (item) => String(item?._id) === String(id),
@@ -704,18 +717,19 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
   const courseName =
     stripClassFromTitle(courseTitle) || "Mata Kuliah";
 
+  const userClass = normalizeClassCode(
+    userData?.kelas,
+  );
+
+  // Prioritas kelas berasal dari data praja yang sedang mengakses.
+  // Data course hanya digunakan sebagai fallback.
   const classCode =
-    selectedCourse?.kelas ||
+    userClass ||
+    normalizeClassCode(selectedCourse?.kelas) ||
     getClassCode(courseTitle) ||
     "—";
 
   const lecturer = getLecturerNames(selectedCourse);
-
-  const participants =
-    selectedCourse?.enrolledStudents?.length ??
-    selectedCourse?.enrolledCount ??
-    selectedCourse?.participants ??
-    0;
   const [activeMenu, setActiveMenu] = useState("Sesi Pembelajaran");
 
   // Daftar peserta langsung dari MongoDB (koleksi User via enrolledStudents)
@@ -724,15 +738,47 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
 
   useEffect(() => {
     if (!id || !backendUrl) return;
+
     setLoadingPeserta(true);
+
     axios
       .get(`${backendUrl}/api/course/${id}/peserta`)
       .then(({ data }) => {
-        if (data.success) setPeserta(data.peserta);
+        if (data.success) {
+          setPeserta(
+            Array.isArray(data.peserta)
+              ? data.peserta
+              : [],
+          );
+        }
       })
-      .catch(() => {})
+      .catch((error) => {
+        console.error(
+          "Gagal mengambil peserta kelas:",
+          error,
+        );
+        setPeserta([]);
+      })
       .finally(() => setLoadingPeserta(false));
   }, [id, backendUrl]);
+
+  // Jika endpoint peserta sudah mengirim field kelas,
+  // daftar dan jumlah peserta difilter berdasarkan kelas praja.
+  // Jika belum, seluruh peserta course tetap digunakan sebagai fallback.
+  const participantHasClassData = peserta.some(
+    (item) => normalizeClassCode(item?.kelas),
+  );
+
+  const classParticipants =
+    userClass && participantHasClassData
+      ? peserta.filter(
+          (item) =>
+            normalizeClassCode(item?.kelas) ===
+            userClass,
+        )
+      : peserta;
+
+  const participants = classParticipants.length;
   const sessions = buildSessions(selectedCourse);
 
   return (
@@ -1473,7 +1519,11 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
             </div>
             <div>
               <span>Jumlah Peserta</span>
-              <strong>{participants} peserta</strong>
+              <strong>
+                {loadingPeserta
+                  ? "Memuat..."
+                  : `${participants} peserta`}
+              </strong>
             </div>
             <div>
               <span>Periode Akademik</span>
@@ -1505,7 +1555,7 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
                   ? selectedCourse.pengajar[0]?.imageUrl
                   : selectedCourse?.pengajar?.imageUrl
               }
-              peserta={peserta}
+              peserta={classParticipants}
               loading={loadingPeserta}
             />
           )}

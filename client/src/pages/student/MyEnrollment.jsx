@@ -171,11 +171,6 @@ const MyEnrollment = () => {
               <th className="px-4 py-3 font-semibold truncate">
                 Course
               </th>
-
-              <th className="px-4 py-3 font-semibold truncate">
-                Duration
-              </th>
-
               <th className="px-4 py-3 font-semibold truncate">
                 Completed
               </th>
@@ -228,15 +223,15 @@ const MyEnrollment = () => {
                     </div>
                   </td>
 
-                  <td className="px-4 py-3 max-sm:hidden">
+                  {/* <td className="px-4 py-3 max-sm:hidden">
                     {calculateCourseDuration(course)}
-                  </td>
+                  </td> */}
 
                   <td className="px-4 py-3 max-sm:hidden">
                     {progress ? (
                       <>
                         {lectureCompleted} / {totalLectures}{" "}
-                        <span>Lectures</span>
+                        <span>Materi</span>
                       </>
                     ) : (
                       <span>Loading...</span>

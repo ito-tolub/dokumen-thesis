@@ -9,6 +9,7 @@ import jwt from "jsonwebtoken";
 import Pegawai from "../models/pegawai.js";
 import Keprajaan from "../models/Keprajaan.js";
 import bcrypt from "bcryptjs";
+import { calculateFeedbackScore } from "../utils/calculateFeedbackScore.js";
 
 export const verifyNipAndBecomeEducator = async (req, res) => {
   try {
@@ -80,8 +81,7 @@ export const activateDosenPassword = async (req, res) => {
       });
     }
 
-    const dosen = await Pegawai.findOne({ nip })
-      .select("+password");
+    const dosen = await Pegawai.findOne({ nip }).select("+password");
 
     if (!dosen) {
       return res.status(404).json({
@@ -122,8 +122,7 @@ export const activateDosenPassword = async (req, res) => {
     if (updateResult.modifiedCount !== 1) {
       return res.status(409).json({
         success: false,
-        message:
-          "Password sudah dibuat atau proses aktivasi sedang dilakukan.",
+        message: "Password sudah dibuat atau proses aktivasi sedang dilakukan.",
       });
     }
 
@@ -153,8 +152,7 @@ export const loginDosen = async (req, res) => {
       });
     }
 
-    const dosen = await Pegawai.findOne({ nip })
-      .select("+password");
+    const dosen = await Pegawai.findOne({ nip }).select("+password");
 
     if (!dosen) {
       return res.status(401).json({
@@ -167,15 +165,11 @@ export const loginDosen = async (req, res) => {
       return res.status(403).json({
         success: false,
         code: "PASSWORD_NOT_CREATED",
-        message:
-          "Password belum dibuat. Silakan pilih Buat Password.",
+        message: "Password belum dibuat. Silakan pilih Buat Password.",
       });
     }
 
-    const passwordValid = await bcrypt.compare(
-      password,
-      dosen.password,
-    );
+    const passwordValid = await bcrypt.compare(password, dosen.password);
 
     if (!passwordValid) {
       return res.status(401).json({
@@ -324,46 +318,173 @@ export const getEnrolledStudentsData = async (req, res) => {
   }
 };
 
-// ─── Track Lecture Activity (dipanggil dari frontend saat praja membuka lecture)
+// ─── Track Lecture Activity ─────────────────────────────
 export const trackLectureActivity = async (req, res) => {
   try {
-    const { courseId, lectureId, duration = 0 } = req.body;
+    const {
+      courseId,
+      lectureId,
+      duration = 0,
+      eventType,
+    } = req.body;
 
-    console.log("Track Activity:", {
-      userId: req.auth?.userId,
-      body: req.body,
-    });
     console.log("=== TRACK ACTIVITY ===");
-    console.log("userId dari auth:", req.auth?.userId);
     console.log("body:", req.body);
-    // Ambil token dari header
+
+    // ==========================================
+    // VALIDASI TOKEN
+    // ==========================================
     const authHeader = req.headers.authorization;
+
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.json({ success: false, message: "Token tidak ditemukan" });
+      return res.status(401).json({
+        success: false,
+        message: "Token tidak ditemukan",
+      });
     }
 
     const token = authHeader.split(" ")[1];
 
-    // Decode Clerk token — ambil userId dari payload
     const payload = JSON.parse(
-      Buffer.from(token.split(".")[1], "base64").toString(),
-    );
-    const userId = payload.sub; // Clerk menyimpan userId di field 'sub'
-
-    await LectureActivity.findOneAndUpdate(
-      { userId: userId, courseId, lectureId },
-      {
-        $inc: {
-          accessCount: 1,
-          totalDuration: duration,
-        },
-      },
-      { upsert: true, new: true },
+      Buffer.from(
+        token.split(".")[1],
+        "base64",
+      ).toString(),
     );
 
-    res.json({ success: true });
+    const userId = payload.sub;
+
+    // ==========================================
+    // VALIDASI INPUT
+    // ==========================================
+    if (!courseId || !lectureId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "courseId dan lectureId wajib diisi",
+      });
+    }
+
+    // ==========================================
+    // EVENT: OBPEM DIBUKA
+    // accessCount +1
+    // totalDuration TIDAK bertambah
+    // ==========================================
+    if (eventType === "open") {
+      const activity =
+        await LectureActivity.findOneAndUpdate(
+          {
+            userId,
+            courseId,
+            lectureId,
+          },
+          {
+            $inc: {
+              accessCount: 1,
+            },
+            $setOnInsert: {
+              totalDuration: 0,
+            },
+          },
+          {
+            upsert: true,
+            new: true,
+            setDefaultsOnInsert: true,
+          },
+        );
+
+      console.log("ACCESS TERSIMPAN:", {
+        lectureId,
+        accessCount:
+          activity.accessCount,
+        totalDuration:
+          activity.totalDuration,
+      });
+
+      return res.json({
+        success: true,
+        eventType: "open",
+        activity,
+      });
+    }
+
+    // ==========================================
+    // EVENT: SIMPAN DURASI
+    // totalDuration bertambah
+    // accessCount TIDAK bertambah
+    // ==========================================
+    if (eventType === "duration") {
+      const safeDuration = Math.max(
+        0,
+        Math.floor(Number(duration) || 0),
+      );
+
+      if (safeDuration <= 0) {
+        return res.json({
+          success: true,
+          eventType: "duration",
+          duration: 0,
+        });
+      }
+
+      const activity =
+        await LectureActivity.findOneAndUpdate(
+          {
+            userId,
+            courseId,
+            lectureId,
+          },
+          {
+            $inc: {
+              totalDuration: safeDuration,
+            },
+            $setOnInsert: {
+              accessCount: 0,
+            },
+          },
+          {
+            upsert: true,
+            new: true,
+            setDefaultsOnInsert: true,
+          },
+        );
+
+      console.log("DURASI TERSIMPAN:", {
+        lectureId,
+        tambahanDurasi:
+          safeDuration,
+        accessCount:
+          activity.accessCount,
+        totalDuration:
+          activity.totalDuration,
+      });
+
+      return res.json({
+        success: true,
+        eventType: "duration",
+        duration: safeDuration,
+        activity,
+      });
+    }
+
+    // ==========================================
+    // EVENT TIDAK VALID
+    // ==========================================
+    return res.status(400).json({
+      success: false,
+      message:
+        "eventType harus 'open' atau 'duration'",
+    });
   } catch (error) {
-    res.json({ success: false, message: error.message });
+    console.error(
+      "Track Lecture Activity Error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -373,9 +494,12 @@ export const getStudentEngagementScore = async (req, res) => {
     const courses = await Course.find({}).lean();
 
     const courseMeta = {};
-    const lectureMap = {}; // ← tambah
+    const lectureMap = {};
+    const courseMap = {};
 
     for (const course of courses) {
+      const courseId = course._id.toString();
+      courseMap[course._id.toString()] = course;
       let totalLecture = 0;
       let expectedDurSec = 0;
       course.courseContent?.forEach((ch) => {
@@ -391,7 +515,8 @@ export const getStudentEngagementScore = async (req, res) => {
           };
         });
       });
-      courseMeta[course._id.toString()] = {
+
+      courseMeta[courseId] = {
         courseTitle: course.courseTitle,
         totalLecture,
         expectedDurSec: expectedDurSec || totalLecture * 600,
@@ -399,12 +524,17 @@ export const getStudentEngagementScore = async (req, res) => {
     }
 
     const courseIdStrings = courses.map((c) => c._id.toString());
-    const semuaPraja = await Keprajaan.find({}, "npp nama").lean();
+    const semuaPraja = await Keprajaan.find(
+      {},
+      "npp nama mentalKepribadian",
+    ).lean();
 
     const userByNpp = {};
     const users = await User.find(
-      { npp: { $exists: true } },
-      "name npp enrolledCourses _id",
+      {
+        npp: { $exists: true },
+      },
+      "name npp enrolledCourses _id varkResult",
     ).lean();
     for (const u of users) {
       if (u.npp != null) userByNpp[u.npp.toString()] = u;
@@ -413,7 +543,6 @@ export const getStudentEngagementScore = async (req, res) => {
     const sesData = [];
 
     for (const praja of semuaPraja) {
-     
       const nppStr = String(praja.npp || "").trim();
       const user = users.find((u) => String(u.npp || "").trim() === nppStr);
 
@@ -425,6 +554,10 @@ export const getStudentEngagementScore = async (req, res) => {
       let totalDurasiDetik = 0;
       const detail = [];
 
+      let grandFeedbackEarned = 0;
+      let grandFeedbackPossible = 0;
+      const feedbackDetails = [];
+
       if (user) {
         const userCourseIds = (user.enrolledCourses || [])
           .map((id) => id.toString())
@@ -432,12 +565,12 @@ export const getStudentEngagementScore = async (req, res) => {
 
         let grandExpectedDur = 0;
         let grandActualDur = 0;
-        let grandTotalLecture = 0;
-        let grandSelesai = 0;
 
         for (const courseId of userCourseIds) {
           const meta = courseMeta[courseId];
-          if (!meta) continue;
+          const course = courseMap[courseId];
+
+          if (!meta || !course) continue;
 
           const activities = await LectureActivity.find({
             userId: user._id.toString(),
@@ -453,13 +586,55 @@ export const getStudentEngagementScore = async (req, res) => {
             (sum, a) => sum + (a.totalDuration || 0),
             0,
           );
-          const selesai = progress?.lectureCompleted?.length || 0;
+          // const selesai = progress?.lectureCompleted?.length || 0;
 
           grandExpectedDur += meta.expectedDurSec;
           grandActualDur += actualDurSec;
-          grandTotalLecture += meta.totalLecture;
-          grandSelesai += selesai;
           totalDurasiDetik += actualDurSec;
+
+          // ========================================
+          // FEEDBACK NORMALISASI 36 UNIT
+          // ========================================
+
+          const dominantVark = user?.varkResult?.dominant;
+
+          const mentalKepribadian = praja?.mentalKepribadian;
+
+          const feedbackResult = calculateFeedbackScore({
+            course,
+
+            lectureCompleted: progress?.lectureCompleted || [],
+
+            dominant: dominantVark,
+
+            mentalKepribadian,
+          });
+
+          grandFeedbackEarned += feedbackResult.earned;
+
+          grandFeedbackPossible += feedbackResult.possible;
+
+          feedbackDetails.push({
+            courseId,
+            courseTitle: course.courseTitle,
+
+            earned: feedbackResult.earned,
+            possible: feedbackResult.possible,
+
+            mainEarned: feedbackResult.mainEarned,
+
+            mainPossible: feedbackResult.mainPossible,
+
+            dominantEarned: feedbackResult.dominantEarned,
+
+            dominantPossible: feedbackResult.dominantPossible,
+
+            supplementaryEarned: feedbackResult.supplementaryEarned,
+
+            supplementaryPossible: feedbackResult.supplementaryPossible,
+
+            chapterDetails: feedbackResult.chapterDetails,
+          });
 
           // ← detail per objek pembelajaran yang diakses
           for (const activity of activities) {
@@ -481,10 +656,25 @@ export const getStudentEngagementScore = async (req, res) => {
         if (grandExpectedDur > 0) {
           interaksi = Math.min((grandActualDur / grandExpectedDur) * 100, 100);
         }
-        if (grandTotalLecture > 0) {
-          feedback = Math.min((grandSelesai / grandTotalLecture) * 100, 100);
+        if (grandFeedbackPossible > 0) {
+          feedback = Math.min(
+            (grandFeedbackEarned / grandFeedbackPossible) * 100,
+            100,
+          );
         }
       }
+
+      console.log("===== FEEDBACK 36 UNIT =====");
+      console.log({
+        nama: praja.nama,
+        npp: praja.npp,
+        dominantVark: user?.varkResult?.dominant,
+        mentalKepribadian: praja?.mentalKepribadian,
+        feedbackEarned: grandFeedbackEarned,
+        feedbackPossible: grandFeedbackPossible,
+        feedbackPercent: feedback,
+        feedbackDetails,
+      });
 
       const ses = interaksi * 0.3 + feedback * 0.3 + 100 * 0.4;
 

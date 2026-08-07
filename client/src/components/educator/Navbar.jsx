@@ -157,14 +157,14 @@ const Navbar = () => {
         <div className="hidden md:flex items-center gap-5 text-gray-500">
           {dosenToken ? (
             <DosenUserButton dosenNama={dosenNama} onSignOut={signOutDosen} />
-          ) : (
-            <button
-              type="button"
-              onClick={handleOpenDosenModal}
-              className="relative z-[110] pointer-events-auto cursor-pointer text-sm border border-gray-400 px-4 py-1.5 rounded-full hover:bg-gray-100"
-            >
-              Login sebagai Dosen
-            </button>
+          ) : (NULL
+            // <button
+            //   type="button"
+            //   // onClick={handleOpenDosenModal}
+            //   className="relative z-[110] pointer-events-auto cursor-pointer text-sm border border-gray-400 px-4 py-1.5 rounded-full hover:bg-gray-100"
+            // >
+            //   Login sebagai Dosen
+            // </button>
           )}
 
           {user && <Link to="/my-enrollments">My Enrollments</Link>}
