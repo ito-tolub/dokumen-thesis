@@ -12,6 +12,7 @@ import connectCloudinary from './configs/cloudinary.js'
 import courseRouter from './routes/courseRoute.js'
 import userRouter from './routes/userRoutes.js'
 import keprajaanRouter from './routes/keprajaanRoutes.js'
+import quizRouter from "./routes/quizRoutes.js";
 
 const app = express()
 
@@ -39,11 +40,12 @@ app.post(
 
 
 // Normal API routes
-app.use('/api/educator', express.json(), educatorRouter)
 app.use(clerkMiddleware())
+app.use('/api/educator', express.json(), educatorRouter)
 app.use('/api/course', express.json(), courseRouter)
 app.use('/api/user', express.json(), userRouter)
 app.use('/api/keprajaan', express.json(), keprajaanRouter)
+app.use("/api/quiz",express.json(), quizRouter);
 
 // Test route
 app.get('/', (req, res) => res.send('API Working'))

@@ -2,7 +2,7 @@ import React, { useState, useContext, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { AppContext } from "../../context/AppContext";
-
+import { useAuth } from "@clerk/clerk-react";
 const Ico = ({ name, size = 16, className = "", style = {} }) => (
   <i
     className={`ti ti-${name} ${className}`}
@@ -142,9 +142,7 @@ const getLecturerNames = (course) => {
 
   if (Array.isArray(pengajar)) {
     const names = pengajar
-      .map((dosen) =>
-        typeof dosen === "string" ? dosen : dosen?.nama,
-      )
+      .map((dosen) => (typeof dosen === "string" ? dosen : dosen?.nama))
       .filter(Boolean);
 
     if (names.length > 0) return names.join(", ");
@@ -338,7 +336,6 @@ const RpsTabs = ({ sessions, course }) => {
   const labs = course?.virtualLab || [];
 
   return (
-    
     <section className="cd-session-list">
       <div className="cd-tabs">
         {TABS.map((t) => (
@@ -394,15 +391,11 @@ const normalizeClassCode = (value) => {
     .trim()
     .toUpperCase();
 
-  return ["G1", "G2"].includes(normalized)
-    ? normalized
-    : "";
+  return ["G1", "G2"].includes(normalized) ? normalized : "";
 };
 
 const getClassCode = (title = "") =>
-  normalizeClassCode(
-    title.match(/\(([^)]+)\)/)?.[1],
-  );
+  normalizeClassCode(title.match(/\(([^)]+)\)/)?.[1]);
 
 const ActionShortcut = ({ icon, label, color }) => (
   <button className="cd-shortcut" type="button">
@@ -695,7 +688,11 @@ const KelompokPanel = () => (
 );
 
 const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
+  
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { getToken } = useAuth();
+
   const {
     enrolledCourses = [],
     allCourses = [],
@@ -710,16 +707,11 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
   const selectedCourse = realCourse || course || null;
 
   const courseTitle =
-    selectedCourse?.courseTitle ||
-    selectedCourse?.title ||
-    "";
+    selectedCourse?.courseTitle || selectedCourse?.title || "";
 
-  const courseName =
-    stripClassFromTitle(courseTitle) || "Mata Kuliah";
+  const courseName = stripClassFromTitle(courseTitle) || "Mata Kuliah";
 
-  const userClass = normalizeClassCode(
-    userData?.kelas,
-  );
+  const userClass = normalizeClassCode(userData?.kelas);
 
   // Prioritas kelas berasal dari data praja yang sedang mengakses.
   // Data course hanya digunakan sebagai fallback.
@@ -735,6 +727,8 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
   // Daftar peserta langsung dari MongoDB (koleksi User via enrolledStudents)
   const [peserta, setPeserta] = useState([]);
   const [loadingPeserta, setLoadingPeserta] = useState(true);
+  const [quizzes, setQuizzes] = useState([]);
+  const [loadingQuiz, setLoadingQuiz] = useState(false);
 
   useEffect(() => {
     if (!id || !backendUrl) return;
@@ -745,37 +739,109 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
       .get(`${backendUrl}/api/course/${id}/peserta`)
       .then(({ data }) => {
         if (data.success) {
-          setPeserta(
-            Array.isArray(data.peserta)
-              ? data.peserta
-              : [],
-          );
+          setPeserta(Array.isArray(data.peserta) ? data.peserta : []);
         }
       })
       .catch((error) => {
-        console.error(
-          "Gagal mengambil peserta kelas:",
-          error,
-        );
+        console.error("Gagal mengambil peserta kelas:", error);
         setPeserta([]);
       })
       .finally(() => setLoadingPeserta(false));
   }, [id, backendUrl]);
 
-  // Jika endpoint peserta sudah mengirim field kelas,
-  // daftar dan jumlah peserta difilter berdasarkan kelas praja.
-  // Jika belum, seluruh peserta course tetap digunakan sebagai fallback.
-  const participantHasClassData = peserta.some(
-    (item) => normalizeClassCode(item?.kelas),
+  useEffect(() => {
+    if (!id || !backendUrl) return;
+
+    const fetchQuizzes = async () => {
+      try {
+        setLoadingQuiz(true);
+
+        const token = await getToken();
+
+        const { data } = await axios.get(
+          `${backendUrl}/api/quiz/course/${id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+        if (data.success) {
+          setQuizzes(data.quizzes || []);
+        }
+      } catch (error) {
+        console.error("Gagal mengambil kuis:", error);
+      } finally {
+        setLoadingQuiz(false);
+      }
+    };
+
+    fetchQuizzes();
+  }, [id, backendUrl, getToken]);
+
+  const QuizPanel = ({ quizzes, loading, onOpen }) => {
+  if (loading) {
+    return (
+      <div className="cd-side-card empty-task">
+        Memuat kuis...
+      </div>
+    );
+  }
+
+  if (!quizzes || quizzes.length === 0) {
+    return (
+      <div className="cd-side-card empty-task">
+        Belum ada kuis untuk mata kuliah ini.
+      </div>
+    );
+  }
+
+  return (
+    <section className="space-y-4">
+      {quizzes.map((quiz) => (
+        <div
+          key={quiz._id}
+          className="bg-white border rounded-lg p-5"
+        >
+          <p className="text-sm text-gray-500">
+            Pertemuan {quiz.pertemuan}
+          </p>
+
+          <h3 className="font-semibold text-lg">
+            {quiz.title}
+          </h3>
+
+          <p className="text-sm text-gray-500 mt-1">
+            {quiz.questionCount} soal • {quiz.duration} menit
+          </p>
+
+          {quiz.completed ? (
+            <div className="mt-4">
+              <strong>Nilai: {quiz.score}</strong>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onOpen(quiz._id)}
+              className="mt-4 px-4 py-2 bg-green-600 text-white rounded"
+            >
+              Mulai Kuis
+            </button>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+};
+
+  const participantHasClassData = peserta.some((item) =>
+    normalizeClassCode(item?.kelas),
   );
 
   const classParticipants =
     userClass && participantHasClassData
-      ? peserta.filter(
-          (item) =>
-            normalizeClassCode(item?.kelas) ===
-            userClass,
-        )
+      ? peserta.filter((item) => normalizeClassCode(item?.kelas) === userClass)
       : peserta;
 
   const participants = classParticipants.length;
@@ -1520,9 +1586,7 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
             <div>
               <span>Jumlah Peserta</span>
               <strong>
-                {loadingPeserta
-                  ? "Memuat..."
-                  : `${participants} peserta`}
+                {loadingPeserta ? "Memuat..." : `${participants} peserta`}
               </strong>
             </div>
             <div>
@@ -1543,7 +1607,11 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
 
           {activeMenu === "Tugas" && (
             <TugasPanel
-              items={selectedCourse?.tugas?.length ? selectedCourse.tugas : DEMO_TUGAS}
+              items={
+                selectedCourse?.tugas?.length
+                  ? selectedCourse.tugas
+                  : DEMO_TUGAS
+              }
             />
           )}
 
@@ -1560,11 +1628,20 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
             />
           )}
 
+          {activeMenu === "Kuis" && (
+            <QuizPanel
+              quizzes={quizzes}
+              loading={loadingQuiz}
+              onOpen={(quizId) => navigate(`/quiz/${quizId}`)}
+            />
+          )}
+
           {activeMenu === "Kelompok" && <KelompokPanel />}
 
           {activeMenu !== "Sesi Pembelajaran" &&
             activeMenu !== "Tugas" &&
             activeMenu !== "Pengajar & Peserta" &&
+            activeMenu !== "Kuis" &&
             activeMenu !== "Kelompok" && (
               <>
                 <section className="cd-share-card">

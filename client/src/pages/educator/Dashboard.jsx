@@ -1,109 +1,76 @@
-import React, { useContext, useEffect, useState } from 'react'
-import { AppContext } from '../../context/AppContext'
-import { assets, dummyDashboardData } from '../../assets/assets'
-import Loading from '../../components/student/Loading'
-import { toast } from 'react-toastify'
-import axios from 'axios'
+import React from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
-const Dashboard = () => {
+const EducatorLayout = () => {
+  const navigate = useNavigate();
 
-  const [dashboardData, setDashboardData] = useState(null)
-  const {currency, backendUrl, isEducator, getToken} = useContext(AppContext)
-  
-const fetchDashboardData = async () => {
-  try {
-    // Cek apakah login sebagai dosen (JWT) atau praja (Clerk)
-    const dosenToken = localStorage.getItem('dosenToken')
-    console.log('dosenToken:', dosenToken?.slice(0, 30))
-    const token = dosenToken || await getToken()
-    console.log('token yang dipakai:', token?.slice(0, 30))
+  const menu = [
+    {
+      label: "Hasil Kuis Praja",
+      path: "/educator/my-course",
+    },
+    {
+      label: "Student Engagement",
+      path: "/educator/student-engagement",
+    },
+  ];
 
-    const {data} = await axios.get(backendUrl+'/api/educator/dashboard', {
-      headers: {Authorization:`Bearer ${token}`}
-    })
+  const handleLogout = () => {
+    localStorage.removeItem("dosenToken");
+    navigate("/educator/login");
+  };
 
-    if (data.success) {
-      setDashboardData(data.dashboardData) // ← ambil data.dashboardData, bukan data
-    } else {
-      toast.error(data.message)
-    }
-  } catch (error) {
-    toast.error(error.response?.data?.message || 'Failed to load dashboard data')
-  }
-}
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
 
-  useEffect(() => {
-    console.log('Dashboard mounted', dummyDashboardData)
-    fetchDashboardData()
-   }, [])
+      {/* SIDEBAR */}
+      <aside className="w-64 min-h-screen bg-white border-r border-gray-200 px-4 py-6">
 
-  return dashboardData ? (
-    <div className='min-h-screen flex flex-col items-start justify-between gap-8 md:p-8 md:pb-0 p-4 pt-8 pb-0'>
-      <div className='space-y-5'>
-        <div className='flex flex-wrap gap-5 items-center'>
-          <div className='flex items-center gap-3 shadow-card border border-blue-500 p-4 w-56 rounded-md'>
-            <img src={assets.patients_icon} alt="patients icon" />
-            <div>
-              <p className='text-2xl font-medium text-gray-600'>{dashboardData.enrolledStudentsData.length}</p>
-              <p className='text-base text-gray-500'>Total Enrollment</p>
-            </div>
-          </div>
-          <div className='flex items-center gap-3 shadow-card border border-blue-500 p-4 w-56 rounded-md'>
-            <img src={assets.appointments_icon} alt="appointment icon" />
-            <div>
-              <p className='text-2xl font-medium text-gray-600'>{dashboardData.totalCourses}</p>
-              <p className='text-base text-gray-500'>Total Courses</p>
-            </div>
-          </div>
-          <div className='flex items-center gap-3 shadow-card border border-blue-500 p-4 w-56 rounded-md'>
-            <img src={assets.earning_icon} alt="earning icon" />
-            <div>
-              <p className='text-2xl font-medium text-gray-600'>{currency} {dashboardData.totalEarnings}</p>
-              <p className='text-base text-gray-500'>Total Earnings</p>
-            </div>
-          </div>
+        <div className="mb-8 px-3">
+          <h2 className="text-lg font-bold text-gray-800">
+            Educator
+          </h2>
+
+          <p className="text-xs text-gray-400 mt-1">
+            Learning Management System
+          </p>
         </div>
 
-        {/* Latest Enrollments Section */}
-        <div>
-          <h2 className='pb-4 text-lg font-medium'>Latest Enrollments</h2>
-          <div className='flex flex-col items-center max-w-4xl w-full overflow-hidden rounded-md bg-white border border-gray-500/20'>
-            <table className='table-fixed md:table-auto w-full overflow-hidden'>
-              <thead className='text-gray-900 border-b border-gray-500/20 text-sm text-left'>
-                <tr>
-                  <th className='px-4 py-3 text-center hidden font-semibold sm:table-cell'>#</th>
-                  <th className='px-4 py-3 font-semibold'>Student Name</th>
-                  <th className='px-4 py-3 font-semibold'>Course Title</th>
-                </tr>
-              </thead>
-              <tbody className='text-sm text-gray-500'>
-  {dashboardData.enrolledStudentsData?.map((item, index) => (
-    <tr key={index} className='border-b border-gray-500/20'>
-      <td className='px-4 py-3 text-center hidden sm:table-cell'>
-        {index + 1}
-      </td>
+        <nav className="space-y-2">
+          {menu.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) =>
+                `block px-4 py-3 rounded-lg text-sm font-medium transition ${
+                  isActive
+                    ? "bg-green-50 text-green-600"
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                }`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
 
-      <td className='md:px-4 px-2 py-3 flex items-center space-x-3'>
-        <img
-          src={item.student.imageUrl}
-          alt="Profile"
-          className='w-9 h-9 rounded-full'
-        />
-        <span>{item.student.name}</span>
-      </td>
-
-      <td className='px-6 py-4 text-sm text-gray-500'>
-        {item.courseTitle}
-      </td>
-    </tr>
-  ))}
-</tbody>
-            </table>
-          </div>
+        <div className="mt-10 border-t pt-4">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-lg"
+          >
+            Keluar
+          </button>
         </div>
-      </div> 
+      </aside>
+
+      {/* CONTENT */}
+      <main className="flex-1 min-w-0">
+        <Outlet />
+      </main>
     </div>
-  ) : <Loading/>
-}
+  );
+};
 
-export default Dashboard
+export default EducatorLayout;

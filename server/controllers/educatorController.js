@@ -10,6 +10,8 @@ import Pegawai from "../models/pegawai.js";
 import Keprajaan from "../models/Keprajaan.js";
 import bcrypt from "bcryptjs";
 import { calculateFeedbackScore } from "../utils/calculateFeedbackScore.js";
+import Quiz from "../models/Quiz.js";
+import QuizAttempt from "../models/QuizAttempt.js";
 
 export const verifyNipAndBecomeEducator = async (req, res) => {
   try {
@@ -266,6 +268,233 @@ export const getEducatorCourses = async (req, res) => {
     res.json({ success: true, courses });
   } catch (error) {
     res.json({ success: false, message: error.message });
+  }
+};
+
+// ─── Get Course Quiz Results ──────────────────────────────────────────────
+
+export const getCourseQuizResults = async (req, res) => {
+  try {
+    const educatorNip = req.educator.nip;
+    const { courseId } = req.params;
+
+    const kelas = String(req.query.kelas || "G1")
+      .trim()
+      .toUpperCase();
+
+    // ================================
+    // VALIDASI KELAS
+    // ================================
+
+    if (!["G1", "G2"].includes(kelas)) {
+      return res.status(400).json({
+        success: false,
+        message: "Kelas harus G1 atau G2",
+      });
+    }
+
+    // ================================
+    // CEK COURSE MILIK DOSEN
+    // ================================
+
+    const course = await Course.findOne({
+      _id: courseId,
+      educator: educatorNip,
+    })
+      .select("courseTitle enrolledStudents")
+      .lean();
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Mata kuliah tidak ditemukan atau bukan milik dosen ini",
+      });
+    }
+
+    // ================================
+    // AMBIL PRAJA BERDASARKAN KELAS
+    // ================================
+
+    let prajaList = await Keprajaan.find({
+      kelas,
+    })
+      .select("npp nama kelas")
+      .sort({ nama: 1 })
+      .lean();
+
+    // ================================
+    // FILTER PRAJA YANG TERDAFTAR
+    // DI COURSE
+    // ================================
+
+    if (
+      Array.isArray(course.enrolledStudents) &&
+      course.enrolledStudents.length > 0
+    ) {
+      const enrolledUsers = await User.find({
+        _id: {
+          $in: course.enrolledStudents,
+        },
+      })
+        .select("npp")
+        .lean();
+
+      const enrolledNpps = new Set(
+        enrolledUsers
+          .map((user) =>
+            String(user.npp || "").trim(),
+          )
+          .filter(Boolean),
+      );
+
+      prajaList = prajaList.filter((praja) =>
+        enrolledNpps.has(
+          String(praja.npp || "").trim(),
+        ),
+      );
+    }
+
+    // ================================
+    // AMBIL KUIS PERTEMUAN 3 - 7
+    // ================================
+
+    const quizzes = await Quiz.find({
+      courseId,
+      pertemuan: {
+        $in: [3, 4, 5, 6, 7],
+      },
+    })
+      .select("_id pertemuan title")
+      .sort({ pertemuan: 1 })
+      .lean();
+
+    // ================================
+    // AMBIL HASIL KUIS
+    // ================================
+
+    const attempts = await QuizAttempt.find({
+      courseId,
+      pertemuan: {
+        $in: [3, 4, 5, 6, 7],
+      },
+    })
+      .select(
+        "npp pertemuan score correctCount wrongCount submittedAt",
+      )
+      .sort({ submittedAt: 1 })
+      .lean();
+
+    // ================================
+    // BUAT MAP NILAI BERDASARKAN NPP
+    // ================================
+
+    const attemptMap = new Map();
+
+    for (const attempt of attempts) {
+      const npp = String(
+        attempt.npp || "",
+      ).trim();
+
+      if (!npp) continue;
+
+      if (!attemptMap.has(npp)) {
+        attemptMap.set(npp, {});
+      }
+
+      attemptMap.get(npp)[attempt.pertemuan] = {
+        score: attempt.score,
+        correctCount: attempt.correctCount,
+        wrongCount: attempt.wrongCount,
+        submittedAt: attempt.submittedAt,
+      };
+    }
+
+    // ================================
+    // FORMAT DATA UNTUK FRONTEND
+    // ================================
+
+    const students = prajaList.map((praja) => {
+      const npp = String(
+        praja.npp || "",
+      ).trim();
+
+      const attemptsByMeeting =
+        attemptMap.get(npp) || {};
+
+      const scores = {
+        3: attemptsByMeeting[3]?.score ?? null,
+        4: attemptsByMeeting[4]?.score ?? null,
+        5: attemptsByMeeting[5]?.score ?? null,
+        6: attemptsByMeeting[6]?.score ?? null,
+        7: attemptsByMeeting[7]?.score ?? null,
+      };
+
+      // hanya nilai yang sudah dikerjakan
+      const completedScores = Object.values(
+        scores,
+      ).filter(
+        (score) =>
+          typeof score === "number" &&
+          !Number.isNaN(score),
+      );
+
+      const average =
+        completedScores.length > 0
+          ? Math.round(
+              (completedScores.reduce(
+                (total, score) =>
+                  total + score,
+                0,
+              ) /
+                completedScores.length) *
+                100,
+            ) / 100
+          : null;
+
+      return {
+        npp,
+        nama: praja.nama,
+        kelas: praja.kelas,
+        scores,
+        average,
+      };
+    });
+
+    // ================================
+    // RESPONSE
+    // ================================
+
+    return res.json({
+      success: true,
+
+      course: {
+        _id: course._id,
+        courseTitle: course.courseTitle,
+      },
+
+      kelas,
+
+      quizzes: quizzes.map((quiz) => ({
+        _id: quiz._id,
+        pertemuan: quiz.pertemuan,
+        title: quiz.title,
+      })),
+
+      students,
+    });
+  } catch (error) {
+    console.error(
+      "Get Course Quiz Results Error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Gagal mengambil hasil kuis",
+    });
   }
 };
 
@@ -735,7 +964,7 @@ export const getStudentEngagementScore = async (req, res) => {
         feedback: Math.round(feedback * 10) / 10,
         presensi: 100,
         ses: Math.round(ses * 100) / 100,
-        
+
         totalDurasiDetik,
         kategori,
         kategoriColor,
