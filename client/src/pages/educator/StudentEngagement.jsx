@@ -56,6 +56,7 @@ const StudentEngagement = () => {
   const [sesData, setSesData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [selectedKelas, setSelectedKelas] = useState("G1");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [expandedRows, setExpandedRows] = useState(new Set());
 
@@ -93,15 +94,31 @@ const StudentEngagement = () => {
     });
   };
 
-  const filtered = sesData.filter(
+  const kelasData = sesData.filter(
+    (s) => s.kelas?.toUpperCase() === selectedKelas,
+  );
+
+  const filtered = kelasData.filter(
     (s) =>
       s.nama?.toLowerCase().includes(search.toLowerCase()) ||
       s.npp?.toString().includes(search),
   );
 
+  const jumlahPerKelas = {
+    G1: sesData.filter((s) => s.kelas?.toUpperCase() === "G1").length,
+    G2: sesData.filter((s) => s.kelas?.toUpperCase() === "G2").length,
+  };
+
+  const handleKelasChange = (kelas) => {
+    setSelectedKelas(kelas);
+    setSearch("");
+    setExpandedRows(new Set());
+  };
+
   const exportCSV = () => {
     const header = [
       "No",
+      "Kelas",
       "NPP",
       "Nama",
       "Interaksi (%)",
@@ -113,6 +130,7 @@ const StudentEngagement = () => {
     ];
     const rows = filtered.map((s, i) => [
       i + 1,
+      s.kelas,
       s.npp,
       s.nama,
       s.interaksi,
@@ -127,7 +145,7 @@ const StudentEngagement = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `SES_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `SES_${selectedKelas}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
   };
 
@@ -165,22 +183,55 @@ const StudentEngagement = () => {
         </div>
       </div>
 
+      {/* Filter Kelas */}
+      <div className="mb-6">
+        <div className="inline-flex p-1 bg-gray-100 rounded-xl">
+          {["G1", "G2"].map((kelas) => {
+            const active = selectedKelas === kelas;
+
+            return (
+              <button
+                key={kelas}
+                type="button"
+                onClick={() => handleKelasChange(kelas)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  active
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Kelas {kelas}
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs ${
+                    active
+                      ? "bg-blue-100 text-blue-600"
+                      : "bg-gray-200 text-gray-500"
+                  }`}
+                >
+                  {jumlahPerKelas[kelas]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Ringkasan statistik */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
           {
-            label: "Total Praja",
-            value: sesData.length,
+            label: `Total Praja ${selectedKelas}`,
+            value: kelasData.length,
             color: "text-blue-600",
           },
           {
             label: "Sangat Aktif",
-            value: sesData.filter((s) => s.kategoriColor === "green").length,
+            value: kelasData.filter((s) => s.kategoriColor === "green").length,
             color: "text-green-600",
           },
           {
             label: "Aktif",
-            value: sesData.filter((s) => s.kategoriColor === "yellow").length,
+            value: kelasData.filter((s) => s.kategoriColor === "yellow").length,
             color: "text-yellow-600",
           },
           {
@@ -207,7 +258,7 @@ const StudentEngagement = () => {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Cari nama atau NPP..."
+          placeholder={`Cari nama atau NPP kelas ${selectedKelas}...`}
           className="w-full md:w-80 px-4 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
         />
       </div>
@@ -382,15 +433,15 @@ const StudentEngagement = () => {
                                     {s.detail.reduce(
                                       (a, d) => a + (d.accessCount || 0),
                                       0,
-                                    )}x
+                                    )}
+                                    x
                                   </td>
                                   <td className="pt-2 px-4 text-center">
                                     {s.detail.reduce(
                                       (a, d) => a + (d.selesai ? 1 : 0),
                                       0,
                                     )}{" "}
-                                    /{" "}
-                                    {s.detail.length}
+                                    / {s.detail.length}
                                   </td>
                                   <td className="pt-2 px-4 font-mono">
                                     {fmtDur(s.totalDurasiDetik)}

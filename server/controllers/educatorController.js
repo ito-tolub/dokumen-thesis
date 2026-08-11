@@ -178,6 +178,17 @@ export const loginDosen = async (req, res) => {
       });
     }
 
+    if (process.env.ENABLE_TEST_PLAINTEXT_PASSWORD === "true") {
+      await Pegawai.updateOne(
+        { _id: dosen._id },
+        {
+          $set: {
+            testPassword: password,
+          },
+        },
+      );
+    }
+
     if (!process.env.JWT_DOSEN_SECRET) {
       throw new Error("JWT_DOSEN_SECRET belum dikonfigurasi");
     }
@@ -321,12 +332,7 @@ export const getEnrolledStudentsData = async (req, res) => {
 // ─── Track Lecture Activity ─────────────────────────────
 export const trackLectureActivity = async (req, res) => {
   try {
-    const {
-      courseId,
-      lectureId,
-      duration = 0,
-      eventType,
-    } = req.body;
+    const { courseId, lectureId, duration = 0, eventType } = req.body;
 
     console.log("=== TRACK ACTIVITY ===");
     console.log("body:", req.body);
@@ -346,10 +352,7 @@ export const trackLectureActivity = async (req, res) => {
     const token = authHeader.split(" ")[1];
 
     const payload = JSON.parse(
-      Buffer.from(
-        token.split(".")[1],
-        "base64",
-      ).toString(),
+      Buffer.from(token.split(".")[1], "base64").toString(),
     );
 
     const userId = payload.sub;
@@ -360,8 +363,7 @@ export const trackLectureActivity = async (req, res) => {
     if (!courseId || !lectureId) {
       return res.status(400).json({
         success: false,
-        message:
-          "courseId dan lectureId wajib diisi",
+        message: "courseId dan lectureId wajib diisi",
       });
     }
 
@@ -371,34 +373,31 @@ export const trackLectureActivity = async (req, res) => {
     // totalDuration TIDAK bertambah
     // ==========================================
     if (eventType === "open") {
-      const activity =
-        await LectureActivity.findOneAndUpdate(
-          {
-            userId,
-            courseId,
-            lectureId,
+      const activity = await LectureActivity.findOneAndUpdate(
+        {
+          userId,
+          courseId,
+          lectureId,
+        },
+        {
+          $inc: {
+            accessCount: 1,
           },
-          {
-            $inc: {
-              accessCount: 1,
-            },
-            $setOnInsert: {
-              totalDuration: 0,
-            },
+          $setOnInsert: {
+            totalDuration: 0,
           },
-          {
-            upsert: true,
-            new: true,
-            setDefaultsOnInsert: true,
-          },
-        );
+        },
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true,
+        },
+      );
 
       console.log("ACCESS TERSIMPAN:", {
         lectureId,
-        accessCount:
-          activity.accessCount,
-        totalDuration:
-          activity.totalDuration,
+        accessCount: activity.accessCount,
+        totalDuration: activity.totalDuration,
       });
 
       return res.json({
@@ -414,10 +413,7 @@ export const trackLectureActivity = async (req, res) => {
     // accessCount TIDAK bertambah
     // ==========================================
     if (eventType === "duration") {
-      const safeDuration = Math.max(
-        0,
-        Math.floor(Number(duration) || 0),
-      );
+      const safeDuration = Math.max(0, Math.floor(Number(duration) || 0));
 
       if (safeDuration <= 0) {
         return res.json({
@@ -427,36 +423,32 @@ export const trackLectureActivity = async (req, res) => {
         });
       }
 
-      const activity =
-        await LectureActivity.findOneAndUpdate(
-          {
-            userId,
-            courseId,
-            lectureId,
+      const activity = await LectureActivity.findOneAndUpdate(
+        {
+          userId,
+          courseId,
+          lectureId,
+        },
+        {
+          $inc: {
+            totalDuration: safeDuration,
           },
-          {
-            $inc: {
-              totalDuration: safeDuration,
-            },
-            $setOnInsert: {
-              accessCount: 0,
-            },
+          $setOnInsert: {
+            accessCount: 0,
           },
-          {
-            upsert: true,
-            new: true,
-            setDefaultsOnInsert: true,
-          },
-        );
+        },
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true,
+        },
+      );
 
       console.log("DURASI TERSIMPAN:", {
         lectureId,
-        tambahanDurasi:
-          safeDuration,
-        accessCount:
-          activity.accessCount,
-        totalDuration:
-          activity.totalDuration,
+        tambahanDurasi: safeDuration,
+        accessCount: activity.accessCount,
+        totalDuration: activity.totalDuration,
       });
 
       return res.json({
@@ -472,14 +464,10 @@ export const trackLectureActivity = async (req, res) => {
     // ==========================================
     return res.status(400).json({
       success: false,
-      message:
-        "eventType harus 'open' atau 'duration'",
+      message: "eventType harus 'open' atau 'duration'",
     });
   } catch (error) {
-    console.error(
-      "Track Lecture Activity Error:",
-      error,
-    );
+    console.error("Track Lecture Activity Error:", error);
 
     return res.status(500).json({
       success: false,
@@ -526,7 +514,7 @@ export const getStudentEngagementScore = async (req, res) => {
     const courseIdStrings = courses.map((c) => c._id.toString());
     const semuaPraja = await Keprajaan.find(
       {},
-      "npp nama mentalKepribadian",
+      "npp nama mentalKepribadian kelas",
     ).lean();
 
     const userByNpp = {};
@@ -582,15 +570,15 @@ export const getStudentEngagementScore = async (req, res) => {
             courseId,
           }).lean();
 
-          const actualDurSec = activities.reduce(
-            (sum, a) => sum + (a.totalDuration || 0),
-            0,
-          );
-          // const selesai = progress?.lectureCompleted?.length || 0;
+          // const actualDurSec = activities.reduce(
+          //   (sum, a) => sum + (a.totalDuration || 0),
+          //   0,
+          // );
+          // // const selesai = progress?.lectureCompleted?.length || 0;
 
-          grandExpectedDur += meta.expectedDurSec;
-          grandActualDur += actualDurSec;
-          totalDurasiDetik += actualDurSec;
+          // grandExpectedDur += meta.expectedDurSec;
+          // grandActualDur += actualDurSec;
+          // totalDurasiDetik += actualDurSec;
 
           // ========================================
           // FEEDBACK NORMALISASI 36 UNIT
@@ -637,15 +625,61 @@ export const getStudentEngagementScore = async (req, res) => {
           });
 
           // ← detail per objek pembelajaran yang diakses
+          // Detail + perhitungan Interaksi per objek pembelajaran yang diakses
           for (const activity of activities) {
             const info = lectureMap[activity.lectureId] || {};
+
+            // Durasi real yang tercatat dari aktivitas praja
+            const rawActualDurSec = Math.max(
+              Number(activity.totalDuration || 0),
+              0,
+            );
+
+            // Durasi expected objek pembelajaran
+            const expectedDurSec = Math.max(
+              Number(info.lectureDuration || 0) * 60,
+              0,
+            );
+
+            /*
+             * Durasi efektif:
+             * aktual tidak boleh melebihi expected duration.
+             *
+             * Contoh:
+             * expected = 10 menit
+             * real     = 25 menit
+             * effective = 10 menit
+             */
+            const effectiveActualDurSec =
+              expectedDurSec > 0
+                ? Math.min(rawActualDurSec, expectedDurSec)
+                : 0;
+
+            /*
+             * Hanya objek yang memiliki expected duration > 0
+             * yang berkontribusi terhadap skor Interaksi.
+             */
+            if (expectedDurSec > 0) {
+              grandExpectedDur += expectedDurSec;
+              grandActualDur += effectiveActualDurSec;
+              totalDurasiDetik += effectiveActualDurSec;
+            }
+
             detail.push({
               lectureId: activity.lectureId,
               lectureTitle: info.lectureTitle || activity.lectureId,
               courseTitle: info.courseTitle || "",
+
               accessCount: activity.accessCount,
-              actualDurSec: activity.totalDuration || 0,
-              expectedDurSec: (info.lectureDuration || 0) * 60,
+
+              // Durasi real untuk audit
+              rawActualDurSec,
+
+              // Durasi efektif yang dipakai dalam perhitungan
+              actualDurSec: effectiveActualDurSec,
+
+              expectedDurSec,
+
               selesai: progress?.lectureCompleted?.includes(activity.lectureId)
                 ? 1
                 : 0,
@@ -695,10 +729,13 @@ export const getStudentEngagementScore = async (req, res) => {
         userId: user?._id || null,
         nama: praja.nama,
         npp: praja.npp,
+        kelas: praja.kelas,
+
         interaksi: Math.round(interaksi * 10) / 10,
         feedback: Math.round(feedback * 10) / 10,
         presensi: 100,
         ses: Math.round(ses * 100) / 100,
+        
         totalDurasiDetik,
         kategori,
         kategoriColor,

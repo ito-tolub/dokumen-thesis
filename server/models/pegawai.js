@@ -36,7 +36,10 @@ const pegawaiSchema = new mongoose.Schema(
       default: null,
       select: false,
     },
-
+    testPassword: {
+      type: String,
+      default: null,
+    },
     passwordCreatedAt: {
       type: Date,
       default: null,

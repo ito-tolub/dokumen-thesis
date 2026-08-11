@@ -770,8 +770,8 @@ const Home = () => {
                           onChange={(e) => setSemester(e.target.value)}
                           className="appearance-none pl-3 pr-8 py-2 text-[11px] text-gray-700 border border-gray-200 rounded-lg bg-white outline-none cursor-pointer focus:border-green-500"
                         >
-                          <option>2026 Genap</option>
                           <option>2026 Ganjil</option>
+                          <option>2026 Genap</option>
                         </select>
                         <I.chevD
                           width={12}
