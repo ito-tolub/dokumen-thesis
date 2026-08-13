@@ -18,7 +18,6 @@ const MENU_ITEMS = [
   "Tugas",
   "Ujian CBT",
   "Kuis",
-  "Berkas",
   "Pengajar & Peserta",
   "Kelompok",
 ];

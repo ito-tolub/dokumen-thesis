@@ -49,12 +49,10 @@ export const getUserData = async (req, res) => {
       const clerkUser = await clerkClient.users.getUser(userId);
       const created = await User.create({
         _id: userId,
+        username: clerkUser.username,
         name:
           `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() ||
           "Praja",
-        email:
-          clerkUser.emailAddresses?.[0]?.emailAddress ||
-          `${userId}@noemail.local`,
         imageUrl: clerkUser.imageUrl || "",
       });
       user = created.toObject();

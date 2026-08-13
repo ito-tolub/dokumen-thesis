@@ -17,7 +17,7 @@ const EducatorLayout = () => {
 
   const handleLogout = () => {
     localStorage.removeItem("dosenToken");
-    navigate("/educator/login");
+    navigate("/");
   };
 
   return (

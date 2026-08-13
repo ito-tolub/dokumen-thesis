@@ -47,11 +47,6 @@ export const clerkWebhooks = async (req, res) => {
 
     switch (type) {
       case "user.created": {
-        const primaryEmail =
-          data.email_addresses?.find(
-            (email) => email.id === data.primary_email_address_id
-          )?.email_address ??
-          data.email_addresses?.[0]?.email_address;
 
         await User.findByIdAndUpdate(
           data.id,
@@ -59,7 +54,7 @@ export const clerkWebhooks = async (req, res) => {
             name:
               [data.first_name, data.last_name].filter(Boolean).join(" ") ||
               "Pengguna",
-            email: primaryEmail,
+            
             imageUrl: data.image_url,
           },
           {
@@ -73,19 +68,13 @@ export const clerkWebhooks = async (req, res) => {
       }
 
       case "user.updated": {
-        const primaryEmail =
-          data.email_addresses?.find(
-            (email) => email.id === data.primary_email_address_id
-          )?.email_address ??
-          data.email_addresses?.[0]?.email_address;
-
         await User.findByIdAndUpdate(
           data.id,
           {
             name:
               [data.first_name, data.last_name].filter(Boolean).join(" ") ||
               "Pengguna",
-            email: primaryEmail,
+            
             imageUrl: data.image_url,
           },
           {

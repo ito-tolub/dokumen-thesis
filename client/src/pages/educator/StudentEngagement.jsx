@@ -275,7 +275,7 @@ const StudentEngagement = () => {
               <th className="px-4 py-3 text-center">
                 Interaksi
                 <span className="block text-gray-400 font-normal normal-case tracking-normal">
-                  Bobot 30% · durasi tonton
+                  Bobot 30% · durasi Baca
                 </span>
               </th>
               <th className="px-4 py-3 text-center">
@@ -389,7 +389,7 @@ const StudentEngagement = () => {
                                     Selesai
                                   </th>
                                   <th className="text-left pb-2 px-4 w-48">
-                                    Durasi Tonton
+                                    Durasi Baca
                                   </th>
                                   <th className="text-center pb-2 px-4">
                                     % Durasi
@@ -484,8 +484,8 @@ const StudentEngagement = () => {
         <p className="font-semibold mb-1">Formula SES:</p>
         <p>SES = (Interaksi × 30%) + (Feedback × 30%) + (Presensi × 40%)</p>
         <p className="mt-1 text-blue-500">
-          Interaksi = durasi tonton aktual ÷ total durasi video &nbsp;|&nbsp;
-          Feedback = lecture yang ditandai selesai &nbsp;|&nbsp; Presensi = 100%
+          Interaksi = durasi baca aktual ÷ total durasi objek pembelajaran &nbsp;|&nbsp;
+          Feedback = objek pembelajaran yang ditandai selesai &nbsp;|&nbsp; Presensi = 100%
           (diasumsikan hadir)
         </p>
       </div>

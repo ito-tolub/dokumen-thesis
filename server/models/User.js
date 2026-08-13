@@ -1,29 +1,35 @@
-import mongoose from 'mongoose'
+import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
-    {
-        _id:{type: String, required: true},
-        name: {type: String, required: true},
-        email: {type: String, required: true, unique: true},
-        imageUrl: {type: String, required: true},
-        npp: { type: String, default: null, sparse: true, unique: true },
-        
-        enrolledCourses: [
-            {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: 'Course'
-            }
-        ],
-        varkResult: {
-            scores: {
-                V: { type: Number, default: 0 },
-                A: { type: Number, default: 0 },
-                R: { type: Number, default: 0 },
-                K: { type: Number, default: 0 },
-            },
-            dominant: { type: [String], default: [] },
-        },
-    }, {timestamps: true});
+  {
+    _id: { type: String, required: true },
+    username: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+    name: { type: String, required: true },
+    imageUrl: { type: String, required: true },
+    npp: { type: String, default: null, sparse: true, unique: true },
 
-    const User = mongoose.model('User', userSchema);
-    export default User
+    enrolledCourses: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Course",
+      },
+    ],
+    varkResult: {
+      scores: {
+        V: { type: Number, default: 0 },
+        A: { type: Number, default: 0 },
+        R: { type: Number, default: 0 },
+        K: { type: Number, default: 0 },
+      },
+      dominant: { type: [String], default: [] },
+    },
+  },
+  { timestamps: true },
+);
+
+const User = mongoose.model("User", userSchema);
+export default User;
