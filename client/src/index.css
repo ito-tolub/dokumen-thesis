@@ -85,3 +85,53 @@ a {
   color: #2563eb; /* blue-600 */
   text-decoration: underline;
 }
+
+/* =====================================================
+   GLOBAL CURSOR UNTUK ELEMEN INTERAKTIF
+   ===================================================== */
+
+button,
+a,
+select,
+summary,
+label[for],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+input[type="checkbox"],
+input[type="radio"],
+input[type="file"],
+[role="button"],
+.clickable {
+  cursor: pointer;
+}
+
+/* Elemen disabled */
+button:disabled,
+input:disabled,
+select:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+button,
+a,
+[role="button"],
+.clickable {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+button:hover:not(:disabled),
+a:hover,
+[role="button"]:hover,
+.clickable:hover {
+  opacity: 0.9;
+}
+
+button:active:not(:disabled),
+[role="button"]:active,
+.clickable:active {
+  transform: scale(0.98);
+}

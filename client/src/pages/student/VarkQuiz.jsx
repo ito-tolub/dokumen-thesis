@@ -365,32 +365,32 @@ const questions = [
     ],
   },
   {
-  id: 16,
-  question:
-    "Ketika ditempatkan pada unit kerja baru dan perlu memahami tata letak serta alur pelayanan, kamu lebih memilih:",
-  options: [
-    {
-      label: "A",
-      text: "Mengikuti peninjauan langsung dan mencoba alur pelayanan tersebut",
-      type: "K",
-    },
-    {
-      label: "B",
-      text: "Melihat denah ruangan dan diagram alur pelayanan",
-      type: "V",
-    },
-    {
-      label: "C",
-      text: "Mendengarkan penjelasan dari petugas dan mengajukan pertanyaan",
-      type: "A",
-    },
-    {
-      label: "D",
-      text: "Membaca panduan tertulis mengenai tata letak dan prosedur pelayanan",
-      type: "R",
-    },
-  ],
-},
+    id: 16,
+    question:
+      "Ketika ditempatkan pada unit kerja baru dan perlu memahami tata letak serta alur pelayanan, kamu lebih memilih:",
+    options: [
+      {
+        label: "A",
+        text: "Mengikuti peninjauan langsung dan mencoba alur pelayanan tersebut",
+        type: "K",
+      },
+      {
+        label: "B",
+        text: "Melihat denah ruangan dan diagram alur pelayanan",
+        type: "V",
+      },
+      {
+        label: "C",
+        text: "Mendengarkan penjelasan dari petugas dan mengajukan pertanyaan",
+        type: "A",
+      },
+      {
+        label: "D",
+        text: "Membaca panduan tertulis mengenai tata letak dan prosedur pelayanan",
+        type: "R",
+      },
+    ],
+  },
 ];
 
 const typeLabels = {
@@ -551,7 +551,28 @@ const VarkQuiz = () => {
       );
 
       if (data.success) {
-        setUserData(data.user);
+        setUserData((previousUser) => ({
+          ...previousUser,
+          ...data.user,
+
+          // Pertahankan data Keprajaan
+          // yang tidak terdapat langsung
+          // pada collection User.
+          kelas: previousUser?.kelas || data.user?.kelas || null,
+
+          namaKeprajaan:
+            previousUser?.namaKeprajaan || data.user?.namaKeprajaan || null,
+
+          mentalKepribadian:
+            previousUser?.mentalKepribadian ??
+            data.user?.mentalKepribadian ??
+            null,
+
+          samapta: previousUser?.samapta ?? data.user?.samapta ?? null,
+
+          nilaiAkhir: previousUser?.nilaiAkhir ?? data.user?.nilaiAkhir ?? null,
+        }));
+
         toast.success("Profil preferensi VARK berhasil disimpan.");
       } else {
         toast.error(data.message || "Hasil VARK gagal disimpan.");
@@ -638,9 +659,9 @@ const VarkQuiz = () => {
             <p>
               Hasil dan data yang disimpan menggunakan skor mentah VARK.
               Persentase pada tampilan hanya membantu interpretasi dan tidak
-              disimpan sebagai vektor rekomendasi. Aplikasi ini tidak menghasilkan
-              kategori resmi VARK seperti “mild Visual”, “VRK”, atau kategori resmi
-              lainnya.
+              disimpan sebagai vektor rekomendasi. Aplikasi ini tidak
+              menghasilkan kategori resmi VARK seperti “mild Visual”, “VRK”,
+              atau kategori resmi lainnya.
             </p>
           </div>
 
@@ -679,6 +700,15 @@ const VarkQuiz = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-cyan-50 to-white flex items-center justify-center px-4 py-16">
       <div className="bg-white rounded-2xl shadow-lg max-w-xl w-full p-8">
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">Formulir VARK</h1>
+
+          <p className="mt-2 text-sm leading-relaxed text-gray-500">
+            Sebelum masuk ke LMS, silakan lengkapi formulir VARK terlebih
+            dahulu.
+          </p>
+        </div>
+
         <div className="mb-6">
           <div className="flex justify-between text-sm text-gray-500 mb-2">
             <span>
@@ -701,8 +731,8 @@ const VarkQuiz = () => {
           {currentQuestion.question}
         </h2>
         <p className="text-sm text-gray-500 mb-5">
-          Pilih satu atau beberapa jawaban yang paling sesuai. Lewati
-          pertanyaan apabila tidak ada pilihan yang sesuai.
+          Pilih satu atau beberapa jawaban yang paling sesuai. Lewati pertanyaan
+          apabila tidak ada pilihan yang sesuai.
         </p>
 
         <div className="space-y-3">

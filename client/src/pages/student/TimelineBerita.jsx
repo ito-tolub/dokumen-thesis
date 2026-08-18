@@ -21,16 +21,13 @@ const DEMO_FEED = [
     author: 'MUHAMMAD TOSAN BINGAMAWA, M.Kom',
     initials: 'MT',
     action: 'menambahkan tugas',
-    breadcrumb: ['Manajemen Proyek Sistem Informasi Pemerintahan', 'Sesi ke 16'],
-    time: '6 bulan yang lalu',
+    breadcrumb: ['Manajemen Proyek Sistem Informasi Pemerintahan', 'Pertemuan ke 8'],
     assignment: {
-      title: 'Ujian Akhir Semester UAS',
-      deadline: '13 Des 2025 23:59',
-      desc: 'Anda dapat mengacu pada materi perkuliahan sesi ke 9 yang sudah saya upload. Selamat mengerjakan.',
-      status: 'Sudah Dikumpulkan',
-      file: 'SOAL UAS MPSIP NEW.pdf',
+      title: 'Ujian Tengah Semester UTS',
+      deadline: '22 September 2026 23:59',
+      desc: 'Anda dapat mengacu pada materi perkuliahan pertemuan ke 1-7 yang sudah saya upload. Selamat mengerjakan.',
+      file: 'SOAL UTS MPSIP.pdf',
     },
-    likes: 4,
     liked: false,
     comments: [],
   },
@@ -218,11 +215,7 @@ const PostCard = ({ post, onLike, onComment }) => {
                     </p>
                   )}
                 </div>
-                {a.status && (
-                  <span className="shrink-0 text-xs font-semibold text-white bg-amber-400 px-3 py-1 rounded-full">
-                    {a.status}
-                  </span>
-                )}
+            
               </div>
               <p className="text-sm text-gray-600 mt-2 leading-relaxed">{a.desc}</p>
 

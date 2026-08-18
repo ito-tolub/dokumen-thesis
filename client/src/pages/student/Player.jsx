@@ -617,9 +617,8 @@ const LectureCard = ({
 }) => {
   const modality = normalizeVark(lecture?.tags);
   const lectureType = getLectureType(lecture);
-  const headerIcon = recommendationEnabled
-    ? varkEmoji[modality] || lectureType.icon
-    : lectureType.icon;
+  const headerIcon = lectureType.icon;
+
   const hybridScore = Number(lecture?._hybridPercentage);
   const hasHybridScore = recommendationEnabled && Number.isFinite(hybridScore);
 
@@ -671,11 +670,11 @@ const LectureCard = ({
         </button>
 
         <div className="flex min-w-0 items-center gap-2">
-          {hasHybridScore && (
+          {/* {hasHybridScore && (
             <span className="truncate rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
               {hybridScore.toFixed(2)}%
             </span>
-          )}
+          )} */}
 
           {isCompleted && (
             <span className="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">
@@ -778,6 +777,7 @@ const Player = () => {
   const recommendationEnabled = userClass === "G2";
 
   const { courseId } = useParams();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sesiParam = parseInt(searchParams.get("sesi"), 10);
   const [courseData, setCourseData] = useState(null);
@@ -799,6 +799,9 @@ const Player = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const lastOpenedLectureRef = useRef(null);
   const mainLectureSliderRef = useRef(null);
+  const [assignments, setAssignments] = useState([]);
+
+  const [loadingAssignments, setLoadingAssignments] = useState(true);
 
   const scrollMainLectures = (direction) => {
     const slider = mainLectureSliderRef.current;
@@ -924,45 +927,37 @@ const Player = () => {
     });
   };
 
-  const trackLectureOpen = async (
-  lectureId,
-) => {
-  if (!lectureId) return;
+  const trackLectureOpen = async (lectureId) => {
+    if (!lectureId) return;
 
-  try {
-    const token = await getToken();
+    try {
+      const token = await getToken();
 
-    const { data } = await axios.post(
-      backendUrl +
-        "/api/user/track-activity",
-      {
-        courseId,
-        lectureId,
-        eventType: "open",
-      },
-      {
-        headers: {
-          Authorization:
-            `Bearer ${token}`,
+      const { data } = await axios.post(
+        backendUrl + "/api/user/track-activity",
+        {
+          courseId,
+          lectureId,
+          eventType: "open",
         },
-      },
-    );
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
 
-    console.log(
-      "OBPEM dibuka:",
-      {
+      console.log("OBPEM dibuka:", {
         lectureId,
         response: data,
-      },
-    );
-  } catch (error) {
-    console.error(
-      "Gagal mencatat akses:",
-      error.response?.data ||
-        error.message,
-    );
-  }
-};
+      });
+    } catch (error) {
+      console.error(
+        "Gagal mencatat akses:",
+        error.response?.data || error.message,
+      );
+    }
+  };
 
   const trackActivityDuration = async (lectureId, duration) => {
     if (!lectureId || duration <= 0) {
@@ -995,6 +990,40 @@ const Player = () => {
       console.log("Gagal menyimpan durasi:", error.message);
     }
   };
+
+  const getAssignments = async () => {
+    try {
+      setLoadingAssignments(true);
+
+      const token = await getToken();
+
+      const { data } = await axios.get(
+        `${backendUrl}/api/assignment/course/${courseId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (data.success) {
+        setAssignments(data.assignments || []);
+      }
+    } catch (error) {
+      console.error(
+        "Gagal mengambil tugas:",
+        error.response?.data || error.message,
+      );
+    } finally {
+      setLoadingAssignments(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!courseId) return;
+
+    getAssignments();
+  }, [courseId]);
 
   // ======================================================
   // 1. MENCATAT OBPEM DIBUKA + MEMULAI SESI DURASI
@@ -1242,6 +1271,17 @@ const Player = () => {
   if (!courseData) return <Loading />;
 
   const currentChapter = courseData.courseContent[selectedChapter];
+
+  const currentAssignments =
+  assignments.filter(
+    (assignment) =>
+      Number(
+        assignment.pertemuan,
+      ) ===
+      Number(
+        currentChapter?.chapterOrder,
+      ),
+  );
   // const dominantLabelText = dominantSet.map((c) => varkLabel[c]).join(" / "); // "Visual / Auditory / Read/Write"
   const lectures = currentChapter?.chapterContent || [];
 
@@ -1527,6 +1567,24 @@ const Player = () => {
 
         {/* ── Konten Utama ── */}
         <main className="min-w-0 flex-1 overflow-y-auto p-6 md:p-8">
+          <button
+            type="button"
+            onClick={() => navigate(`/course/${courseId}`)}
+            className="mb-5 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="h-4 w-4"
+              aria-hidden="true"
+            >
+              <path d="M19 12H5" />
+              <path d="m12 19-7-7 7-7" />
+            </svg>
+            Kembali ke Kelas
+          </button>
           {/* Header Pertemuan */}
           <div className="mb-6 flex items-start gap-3">
             {!isSidebarOpen && (

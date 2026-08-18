@@ -86,53 +86,176 @@ export const saveNpp = async (req, res) => {
     const userId = req.auth.userId;
     const { npp } = req.body;
 
-    if (!npp) {
-      return res.json({ success: false, message: "NPP wajib diisi" });
-    }
+    // =========================================
+    // VALIDASI INPUT
+    // =========================================
 
-    const nppNum = parseFloat(npp);
-    // Cari semua, lalu cocokkan string-nya agar tidak ada floating point mismatch
-    const allKeprajaan = await Keprajaan.find({}).lean();
-    const keprajaan =
-      allKeprajaan.find(
-        (k) =>
-          parseFloat(k.npp).toFixed(4) === nppNum.toFixed(4) ||
-          k.npp.toString() === npp.toString(),
-      ) || null;
-    if (!keprajaan) {
+    if (!npp) {
       return res.json({
         success: false,
-        message: "NPP tidak ditemukan dalam data keprajaan",
+        message: "NPP wajib diisi",
       });
     }
 
-    // Cek NPP belum dipakai user lain
-    const existingUser = await User.findOne({
-      npp: keprajaan.npp,
-      _id: { $ne: userId },
-    });
+    const nppInput =
+      String(npp).trim();
 
-    // Simpan NPP dari DB (bukan dari input) agar format konsisten
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { npp: keprajaan.npp },
-      { new: true },
-    ).lean();
+    // =========================================
+    // CARI DATA KEPRAJAAN
+    // =========================================
 
-    res.json({
+    const allKeprajaan =
+      await Keprajaan.find({}).lean();
+
+    const keprajaan =
+      allKeprajaan.find((item) => {
+        const dbNpp =
+          String(
+            item.npp,
+          ).trim();
+
+        // Perbandingan string langsung
+        if (dbNpp === nppInput) {
+          return true;
+        }
+
+        // Kompatibilitas data lama
+        // apabila NPP pernah tersimpan sebagai Number.
+        const dbNumber =
+          Number.parseFloat(dbNpp);
+
+        const inputNumber =
+          Number.parseFloat(
+            nppInput,
+          );
+
+        if (
+          Number.isNaN(dbNumber) ||
+          Number.isNaN(
+            inputNumber,
+          )
+        ) {
+          return false;
+        }
+
+        return (
+          dbNumber.toFixed(4) ===
+          inputNumber.toFixed(4)
+        );
+      }) || null;
+
+    // =========================================
+    // NPP TIDAK DITEMUKAN
+    // =========================================
+
+    if (!keprajaan) {
+      return res.json({
+        success: false,
+        message:
+          "NPP tidak ditemukan dalam data keprajaan",
+      });
+    }
+
+    // =========================================
+    // NORMALISASI NPP DARI DATABASE
+    // =========================================
+
+    const officialNpp =
+      String(
+        keprajaan.npp,
+      ).trim();
+
+    // =========================================
+    // CEK NPP SUDAH DIPAKAI USER LAIN
+    // =========================================
+
+    const existingUser =
+      await User.findOne({
+        npp: officialNpp,
+
+        _id: {
+          $ne: userId,
+        },
+      }).lean();
+
+    if (existingUser) {
+      return res.json({
+        success: false,
+        message:
+          "NPP ini sudah terhubung dengan akun lain",
+      });
+    }
+
+    // =========================================
+    // UPDATE USER
+    //
+    // Nama RESMI diambil dari collection
+    // keprajaan, bukan dari Clerk.
+    // =========================================
+
+    const user =
+      await User.findByIdAndUpdate(
+        userId,
+        {
+          $set: {
+            npp:
+              officialNpp,
+
+            name:
+              keprajaan.nama,
+          },
+        },
+        {
+          new: true,
+          runValidators: true,
+        },
+      ).lean();
+
+    if (!user) {
+      return res.json({
+        success: false,
+        message:
+          "Data user tidak ditemukan",
+      });
+    }
+
+    return res.json({
       success: true,
-      message: `NPP berhasil disimpan. Selamat datang, ${keprajaan.nama}!`,
+
+      message:
+        `NPP berhasil dikonfirmasi. Selamat datang, ${keprajaan.nama}!`,
+
       user: {
         ...user,
-        mentalKepribadian: keprajaan.mentalKepribadian,
-        samapta: keprajaan.samapta,
-        nilaiAkhir: keprajaan.nilaiAkhir,
-        namaKeprajaan: keprajaan.nama,
-        kelas: keprajaan.kelas,
+
+        mentalKepribadian:
+          keprajaan.mentalKepribadian,
+
+        samapta:
+          keprajaan.samapta,
+
+        nilaiAkhir:
+          keprajaan.nilaiAkhir,
+
+        namaKeprajaan:
+          keprajaan.nama,
+
+        kelas:
+          keprajaan.kelas,
       },
     });
   } catch (error) {
-    res.json({ success: false, message: error.message });
+    console.error(
+      "saveNpp error:",
+      error,
+    );
+
+    return res.json({
+      success: false,
+      message:
+        error.message ||
+        "Gagal menyimpan NPP",
+    });
   }
 };
 
@@ -425,14 +548,94 @@ export const saveVarkResult = async (req, res) => {
     const userId = req.auth.userId;
     const { varkResult } = req.body;
 
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { varkResult },
-      { new: true },
+    const user =
+      await User.findByIdAndUpdate(
+        userId,
+        {
+          $set: {
+            varkResult,
+          },
+        },
+        {
+          new: true,
+        },
+      ).lean();
+
+    if (!user) {
+      return res.json({
+        success: false,
+        message:
+          "Data user tidak ditemukan",
+      });
+    }
+
+    // ========================================
+    // AMBIL DATA KEPRAJAAN BERDASARKAN NPP
+    // ========================================
+
+    let keprajaan = null;
+
+    if (user.npp) {
+      const allKeprajaan =
+        await Keprajaan.find({})
+          .lean();
+
+      keprajaan =
+        allKeprajaan.find(
+          (item) =>
+            String(item.npp) ===
+              String(user.npp) ||
+            Number.parseFloat(
+              item.npp,
+            ).toFixed(4) ===
+              Number.parseFloat(
+                user.npp,
+              ).toFixed(4),
+        ) || null;
+    }
+
+    // ========================================
+    // KEMBALIKAN USER + DATA KEPRAJAAN
+    // ========================================
+
+    return res.json({
+      success: true,
+
+      user: {
+        ...user,
+
+        kelas:
+          keprajaan?.kelas ??
+          null,
+
+        namaKeprajaan:
+          keprajaan?.nama ??
+          null,
+
+        mentalKepribadian:
+          keprajaan
+            ?.mentalKepribadian ??
+          null,
+
+        samapta:
+          keprajaan?.samapta ??
+          null,
+
+        nilaiAkhir:
+          keprajaan?.nilaiAkhir ??
+          null,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "saveVarkResult error:",
+      error,
     );
 
-    res.json({ success: true, user });
-  } catch (error) {
-    res.json({ success: false, message: error.message });
+    return res.json({
+      success: false,
+      message:
+        error.message,
+    });
   }
 };

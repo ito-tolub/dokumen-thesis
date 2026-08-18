@@ -18,6 +18,7 @@ import AddCourse from "./pages/educator/AddCourse";
 import MyCourses from "./pages/educator/MyCourses";
 import StudentsEnrolled from "./pages/educator/StudentsEnrolled";
 import StudentEngagement from "./pages/educator/StudentEngagement";
+import AssignmentManager from "./pages/educator/AssignmentManager";
 
 import Navbar from "./components/student/Navbar";
 import { AppContext } from "./context/AppContext";
@@ -27,28 +28,96 @@ import { ToastContainer } from "react-toastify";
 
 const RequireOnboarding = ({ children }) => {
   const { isLoaded, isSignedIn, user } = useUser();
+
   const { userData, userLoading } = useContext(AppContext);
 
-  if (!isLoaded) return <Loading />;
+  // Clerk belum selesai loading
+  if (!isLoaded) {
+    return <Loading />;
+  }
 
-  if (!isSignedIn) return children;
-  if (user?.publicMetadata?.role === "educator") return children;
+  // Belum login
+  if (!isSignedIn) {
+    return children;
+  }
 
-  if (userLoading) return <Loading />;
+  // Dosen tidak perlu onboarding praja
+  if (user?.publicMetadata?.role === "educator") {
+    return children;
+  }
 
-  if (!userData) return children;
+  // Data user MongoDB masih loading
+  if (userLoading) {
+    return <Loading />;
+  }
+
+  // Tunggu sinkronisasi user
+  if (!userData) {
+    return <Loading />;
+  }
+
+  // ========================================
+  // 1. CEK NPP
+  // ========================================
 
   if (!userData.npp) {
     return <Navigate to="/npp-input" replace />;
   }
 
-  const vark = userData.varkResult;
+  // ========================================
+  // 2. CEK APAKAH VARK SUDAH DIISI
+  // ========================================
 
-  if (!vark || !vark.dominant) {
+  const dominant = userData?.varkResult?.dominant;
+
+  const hasCompletedVark = Array.isArray(dominant) && dominant.length > 0;
+
+  // Login pertama + belum isi VARK
+  if (!hasCompletedVark) {
     return <Navigate to="/vark-quiz" replace />;
   }
 
+  // VARK sudah selesai
   return children;
+};
+
+const VarkOnboardingRoute = () => {
+  const { isLoaded, isSignedIn, user } = useUser();
+
+  const { userData, userLoading } = useContext(AppContext);
+
+  if (!isLoaded || userLoading) {
+    return <Loading />;
+  }
+
+  if (!isSignedIn) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (user?.publicMetadata?.role === "educator") {
+    return <Navigate to="/educator" replace />;
+  }
+
+  if (!userData) {
+    return <Loading />;
+  }
+
+  // NPP wajib tersedia dahulu
+  if (!userData.npp) {
+    return <Navigate to="/npp-input" replace />;
+  }
+
+  const dominant = userData?.varkResult?.dominant;
+
+  const hasCompletedVark = Array.isArray(dominant) && dominant.length > 0;
+
+  // Sudah pernah VARK:
+  // jangan izinkan mengulang
+  if (hasCompletedVark) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <VarkQuiz />;
 };
 
 const App = () => {
@@ -61,10 +130,6 @@ const App = () => {
       {!isEducatorRoute && <Navbar />}
 
       <Routes>
-        {/* =========================
-            STUDENT
-        ========================= */}
-
         <Route
           path="/"
           element={
@@ -131,31 +196,19 @@ const App = () => {
         />
 
         <Route path="/npp-input" element={<NppInput />} />
-        <Route path="/vark-quiz" element={<VarkQuiz />} />
+        <Route path="/vark-quiz" element={<VarkOnboardingRoute />} />
         <Route path="/loading/:path" element={<Loading />} />
-
-        {/* =========================
-            EDUCATOR
-            Dashboard.jsx menjadi layout/sidebar.
-            Pastikan Dashboard.jsx memiliki <Outlet />.
-        ========================= */}
 
         <Route path="/educator" element={<Dashboard />}>
           <Route index element={<Navigate to="my-course" replace />} />
 
           <Route path="my-course" element={<MyCourses />} />
 
-          <Route
-            path="student-engagement"
-            element={<StudentEngagement />}
-          />
+          <Route path="student-engagement" element={<StudentEngagement />} />
 
-          <Route path="add-course" element={<AddCourse />} />
+          <Route path="assignments" element={<AssignmentManager />} />
 
-          <Route
-            path="student-enrolled"
-            element={<StudentsEnrolled />}
-          />
+          <Route path="student-enrolled" element={<StudentsEnrolled />} />
         </Route>
       </Routes>
     </div>

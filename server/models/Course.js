@@ -71,10 +71,6 @@ const courseSchema = new mongoose.Schema(
   },
 );
 
-/* ============================================================
-   VIRTUAL — HARUS didefinisikan SEBELUM mongoose.model(...)
-   Menghubungkan course.educator (NIP) → pegawai.nip → pegawai.nama
-   ============================================================ */
 courseSchema.virtual("pengajar", {
   ref: "Pegawai",
   localField: "educator", 

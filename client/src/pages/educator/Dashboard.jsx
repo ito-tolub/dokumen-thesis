@@ -10,6 +10,10 @@ const EducatorLayout = () => {
       path: "/educator/my-course",
     },
     {
+    label: "Kelola Tugas",
+    path: "/educator/assignments",
+  },
+    {
       label: "Student Engagement",
       path: "/educator/student-engagement",
     },

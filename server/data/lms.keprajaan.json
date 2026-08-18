@@ -1,0 +1,429 @@
+[{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c2b"
+  },
+  "npp": "34.0408",
+  "nama": "DIVA PARADIBA",
+  "mentalKepribadian": 85.2,
+  "samapta": 58.63,
+  "nilaiAkhir": 82.57,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c38"
+  },
+  "npp": "34.0270",
+  "nama": "MUHAMMAD FAQIH RAHMAN",
+  "mentalKepribadian": 89.3,
+  "samapta": 69.63,
+  "nilaiAkhir": 87.1,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c26"
+  },
+  "npp": "34.0338",
+  "nama": "NADIA DITA ANGGRAENI",
+  "mentalKepribadian": 87.7,
+  "samapta": 65.25,
+  "nilaiAkhir": 85.14,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "e399698e3b36a45c17ff134e"
+  },
+  "npp": "34.0419",
+  "nama": "MUHAMMAD HUSAIN YUDIN",
+  "mentalKepribadian": 89.6,
+  "samapta": 73.75,
+  "nilaiAkhir": 88.02,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "ce692edfce0b5ecdc4c1dd3d"
+  },
+  "npp": "34.0360",
+  "nama": "NAURA DHIA SALSABILA",
+  "mentalKepribadian": 83.4,
+  "samapta": 67.25,
+  "nilaiAkhir": 81.78,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "e9b8d8eb743ac8a41445823b"
+  },
+  "npp": "34.0259",
+  "nama": "RIZAL PUTRA MAHENDRA",
+  "mentalKepribadian": 91.8,
+  "samapta": 60,
+  "nilaiAkhir": 88.62,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "ef171cc2784d638b34fa7813"
+  },
+  "npp": "34.0510",
+  "nama": "JAVANCHA SEM BRIAN SINAGA",
+  "mentalKepribadian": 85.9,
+  "samapta": 52.03,
+  "nilaiAkhir": 74.83,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c24"
+  },
+  "npp": "34.0025",
+  "nama": "AMIROH KAMILAH NAMORA LUBIS",
+  "mentalKepribadian": 86.5,
+  "samapta": 57.5,
+  "nilaiAkhir": 83.27,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c27"
+  },
+  "npp": "34.0525",
+  "nama": "FADHILAH ISNAENI PUTRI ARISMA",
+  "mentalKepribadian": 83.6,
+  "samapta": 69.38,
+  "nilaiAkhir": 82.66,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c2d"
+  },
+  "npp": "34.0500",
+  "nama": "ISAK SAMUEL VINSENSIUS BOSEREN",
+  "mentalKepribadian": 90,
+  "samapta": 67.63,
+  "nilaiAkhir": 87.34,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c32"
+  },
+  "npp": "34.0066",
+  "nama": "MARCHELLO HEVIE JHONATAN",
+  "mentalKepribadian": 83.3,
+  "samapta": 61.75,
+  "nilaiAkhir": 80.98,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c35"
+  },
+  "npp": "34.0048",
+  "nama": "MUHAMMAD AGIL MA'RUF SIREGAR",
+  "mentalKepribadian": 85,
+  "samapta": 66.5,
+  "nilaiAkhir": 83.19,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c3b"
+  },
+  "npp": "34.0350",
+  "nama": "MUHAMMAD RAIHAN ANSHARI",
+  "mentalKepribadian": 89.7,
+  "samapta": 61.25,
+  "nilaiAkhir": 86.32,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c33"
+  },
+  "npp": "33.1170",
+  "nama": "TRIVENA IMANUELA SIAMPA RUMBINO",
+  "mentalKepribadian": 85.9,
+  "samapta": 60,
+  "nilaiAkhir": 83.24,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "52db9fa0d4af211849b3a47e"
+  },
+  "npp": "34.0108",
+  "nama": "MUHAMMAD RIFKY RAMADHAN",
+  "mentalKepribadian": 85.3,
+  "samapta": 75.5,
+  "nilaiAkhir": 84.32,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "68636e9bdc605cdf6b893360"
+  },
+  "npp": "33.0412",
+  "nama": "SENDI SENJAYA PUTRA",
+  "mentalKepribadian": 86.8,
+  "samapta": 67,
+  "nilaiAkhir": 84.82,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c28"
+  },
+  "npp": "34.0295",
+  "nama": "AZHARI IZZA ZULFANA",
+  "mentalKepribadian": 89.2,
+  "samapta": 74.13,
+  "nilaiAkhir": 86.12,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c2c"
+  },
+  "npp": "34.0200",
+  "nama": "EVAN KURNIATA DANISWARA",
+  "mentalKepribadian": 83.5,
+  "samapta": 58.13,
+  "nilaiAkhir": 80.78,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c34"
+  },
+  "npp": "34.0090",
+  "nama": "FADHIL WIDI ARRAHMAN",
+  "mentalKepribadian": 92,
+  "samapta": 62.25,
+  "nilaiAkhir": 88.34,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c2a"
+  },
+  "npp": "34.0340",
+  "nama": "RIO SEPTIANO",
+  "mentalKepribadian": 87.6,
+  "samapta": 70.25,
+  "nilaiAkhir": 86.15,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "331a3ed13a32e97cc31667ba"
+  },
+  "npp": "34.0479",
+  "nama": "MAHARANI SURYANINGSIH IMANTO",
+  "mentalKepribadian": 84.8,
+  "samapta": 72.75,
+  "nilaiAkhir": 83.59,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "640ca4b8601ee8d9224ecde3"
+  },
+  "npp": "34.0469",
+  "nama": "MULYADI",
+  "mentalKepribadian": 85.5,
+  "samapta": 71.75,
+  "nilaiAkhir": 84.12,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "c3035df4a6f8f1f2f416b598"
+  },
+  "npp": "34.0095",
+  "nama": "RAKA WIRA PRATAMA",
+  "mentalKepribadian": 77.5,
+  "samapta": 75.5,
+  "nilaiAkhir": 77.3,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "d9cb8f68d9d9b0341314a553"
+  },
+  "npp": "34.0235",
+  "nama": "BIRNADHITA MARSYA TRI HARIYANTO",
+  "mentalKepribadian": 84.4,
+  "samapta": 69.25,
+  "nilaiAkhir": 82.89,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "167fe482ed4a92c8c8050eed"
+  },
+  "npp": "34.0300",
+  "nama": "INAYAH ZAHIRAH PUTRI",
+  "mentalKepribadian": 88.2,
+  "samapta": 72.43,
+  "nilaiAkhir": 80.53,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c29"
+  },
+  "npp": "34.0290",
+  "nama": "PURNAWARMAN",
+  "mentalKepribadian": 86.3,
+  "samapta": 56.25,
+  "nilaiAkhir": 83.79,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c2e"
+  },
+  "npp": "34.0019",
+  "nama": "SATRIA WIDYADHANA",
+  "mentalKepribadian": 85.5,
+  "samapta": 64.25,
+  "nilaiAkhir": 83.67,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c2f"
+  },
+  "npp": "34.0396",
+  "nama": "TASYA NUR LIWENTINA",
+  "mentalKepribadian": 88.2,
+  "samapta": 70.75,
+  "nilaiAkhir": 86.48,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c37"
+  },
+  "npp": "34.0262",
+  "nama": "VIVI DWI ARDIYANTI",
+  "mentalKepribadian": 75.6,
+  "samapta": 62.35,
+  "nilaiAkhir": 74.27,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "69ccca2eef3847dda7f53c3a"
+  },
+  "npp": "34.0055",
+  "nama": "YOGA BREMA TARIGAN",
+  "mentalKepribadian": 78.9,
+  "samapta": 67.95,
+  "nilaiAkhir": 77.81,
+  "kelas": "G1"
+},
+{
+  "_id": {
+    "$oid": "65d337643e7d80fdfed27360"
+  },
+  "npp": "34.0996",
+  "nama": "MUAMMAR BASRUN DAI",
+  "mentalKepribadian": 76.8,
+  "samapta": 63,
+  "nilaiAkhir": 75.42,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "4c76ff8b24f98b098d2f129a"
+  },
+  "npp": "34.0210",
+  "nama": "MUHAMMAD DAFFA DHARMALAKSANA",
+  "mentalKepribadian": 85.5,
+  "samapta": 82,
+  "nilaiAkhir": 85.15,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "4b0e8bba51a55db4466426fa"
+  },
+  "npp": "34.0380",
+  "nama": "RIANDY SAMUEL SUMOLANG",
+  "mentalKepribadian": 85.6,
+  "samapta": 75.5,
+  "nilaiAkhir": 84.59,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "480469a7737ec218a5dca330"
+  },
+  "npp": "34.0484",
+  "nama": "RIVANDY ALDY MARCHELINO KAFIAR",
+  "mentalKepribadian": 80.9,
+  "samapta": 69.5,
+  "nilaiAkhir": 79.76,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "d16a3b73a0cc162f803d7caf"
+  },
+  "npp": "34.0459",
+  "nama": "RIYANTI RAHMA TEA SAID",
+  "mentalKepribadian": 83.1,
+  "samapta": 71.5,
+  "nilaiAkhir": 81.94,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "627290690a270635c6cd4108"
+  },
+  "npp": "34.0450",
+  "nama": "TRI HARIMURTI PRAWIRAYUDA",
+  "mentalKepribadian": 79.1,
+  "samapta": 61.25,
+  "nilaiAkhir": 77.31,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "43bae1603803a839c0cb52f5"
+  },
+  "npp": "34.0440",
+  "nama": "AKBAR FADHILLAH",
+  "mentalKepribadian": 85,
+  "samapta": 73,
+  "nilaiAkhir": 83.8,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "a92b26fa8adc30543fe5a6e7"
+  },
+  "npp": "34.0409",
+  "nama": "DWINIE DZIL FAUZIAH",
+  "mentalKepribadian": 82.8,
+  "samapta": 74.5,
+  "nilaiAkhir": 81.97,
+  "kelas": "G2"
+},
+{
+  "_id": {
+    "$oid": "849e63f8101ac616f8fd0ba8"
+  },
+  "npp": "34.0171",
+  "nama": "GILBERT ADITYA",
+  "mentalKepribadian": 82.9,
+  "samapta": 78.25,
+  "nilaiAkhir": 82.44,
+  "kelas": "G2"
+}]

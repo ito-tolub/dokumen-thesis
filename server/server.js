@@ -13,6 +13,7 @@ import courseRouter from './routes/courseRoute.js'
 import userRouter from './routes/userRoutes.js'
 import keprajaanRouter from './routes/keprajaanRoutes.js'
 import quizRouter from "./routes/quizRoutes.js";
+import assignmentRouter from "./routes/assignmentRoutes.js";
 
 const app = express()
 
@@ -46,6 +47,10 @@ app.use('/api/course', express.json(), courseRouter)
 app.use('/api/user', express.json(), userRouter)
 app.use('/api/keprajaan', express.json(), keprajaanRouter)
 app.use("/api/quiz",express.json(), quizRouter);
+app.use(
+  "/api/assignment",
+  assignmentRouter,
+);
 
 // Test route
 app.get('/', (req, res) => res.send('API Working'))

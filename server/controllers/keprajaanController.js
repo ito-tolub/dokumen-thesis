@@ -36,12 +36,13 @@ export const syncKeprajaan = async (req, res) => {
         const user = await User.findByIdAndUpdate(
             userId,
             {
+                name: keprajaan.nama,
                 npp: String(keprajaan.npp),
                 mentalKepribadian: keprajaan.mentalKepribadian,
                 samapta: keprajaan.samapta,
                 nilaiAkhir: keprajaan.nilaiAkhir,
             },
-            { new: true }
+            { new: true, runValidators: true, }
         )
 
         res.json({ success: true, user, message: 'Data keprajaan berhasil disinkronkan' })

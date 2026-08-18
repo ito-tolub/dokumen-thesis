@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AppContext } from "../../context/AppContext";
 import axios from "axios";
 import { toast } from "react-toastify";
+import { useUser } from "@clerk/clerk-react";
 
 /* ============================================================
    Konstanta kalender
@@ -42,14 +43,10 @@ const dowOf = (y, m, d) => {
   return w === 0 ? 6 : w - 1;
 };
 
-/* ============================================================
-   Struktur semester (sesuaikan tanggal mulainya)
-   8 minggu kuliah (termasuk UTS) → libur ~1 bulan → 7 minggu (termasuk UAS)
-   ============================================================ */
-const SEMESTER_START = new Date(2026, 5, 22); // Senin, 22 Juni 2026 — minggu ke-1
-const WEEKS_BEFORE_BREAK = 8; // 8 minggu pertama (termasuk UTS)
-const BREAK_WEEKS = 4; // libur ~1 bulan
-const WEEKS_AFTER_BREAK = 7; // 7 pertemuan terakhir (termasuk UAS)
+const SEMESTER_START = new Date(2026, 7, 3); // Senin, 22 Juni 2026 — minggu ke-1
+const WEEKS_BEFORE_BREAK = 8;
+const BREAK_WEEKS = 1;
+const WEEKS_AFTER_BREAK = 7;
 
 const MS_DAY = 86400000;
 const midnight = (y, m, d) => new Date(y, m, d).getTime();
@@ -406,14 +403,13 @@ const barColor = (p) => (p === 0 ? "#9ca3af" : p < 50 ? "#f59e0b" : "#16a34a");
 const TARGET_COURSE_TITLE = "Manajemen Proyek Sistem Informasi Pemerintahan";
 
 const ClassCard = ({ course, isEnrolled, isEnrolling, onTakeCourse }) => {
+  const { isSignedIn } = useUser();
   const educatorName = Array.isArray(course?.pengajar)
-  ? course.pengajar
-      .map((dosen) => dosen?.nama)
-      .filter(Boolean)
-      .join("/ ")
-  : course?.pengajar?.nama ||
-    course?.pengajarNama ||
-    "Dosen Pengajar";
+    ? course.pengajar
+        .map((dosen) => dosen?.nama)
+        .filter(Boolean)
+        .join("/ ")
+    : course?.pengajar?.nama || course?.pengajarNama || "Dosen Pengajar";
 
   const sch = course?.schedule;
 
@@ -435,9 +431,19 @@ const ClassCard = ({ course, isEnrolled, isEnrolling, onTakeCourse }) => {
   return (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all">
       <Link
-        to={`/course/${course._id}`}
-        onClick={() => window.scrollTo(0, 0)}
-        className="block p-3.5"
+        to={isSignedIn ? `/course/${course._id}` : "#"}
+        onClick={(event) => {
+          if (!isSignedIn) {
+            event.preventDefault();
+
+            toast.info("Silakan login terlebih dahulu.");
+
+            return;
+          }
+
+          window.scrollTo(0, 0);
+        }}
+        className="block p-3.5 cursor-pointer"
       >
         <h3 className="text-sm font-bold text-gray-900 leading-snug line-clamp-2">
           {course.courseTitle}
@@ -495,7 +501,7 @@ const ClassCard = ({ course, isEnrolled, isEnrolling, onTakeCourse }) => {
         )}
       </Link>
 
-      {isTargetCourse && (
+      {isSignedIn && isTargetCourse && (
         <div className="px-3.5 pb-3.5">
           <button
             type="button"
@@ -532,7 +538,6 @@ const WelcomeBanner = ({ name }) => (
   </div>
 );
 
-
 const Home = () => {
   const {
     allCourses,
@@ -552,37 +557,27 @@ const Home = () => {
     return new Set((enrolledCourses || []).map((course) => String(course._id)));
   }, [enrolledCourses]);
 
-  /*
-   * Jika pengguna sudah memiliki mata kuliah lain,
-   * course target tetap ditampilkan agar dapat diambil.
-   */
   const baseClasses = useMemo(() => {
-    const enrolled = Array.isArray(enrolledCourses) ? enrolledCourses : [];
+    const targetTitle = TARGET_COURSE_TITLE.trim().toLowerCase();
 
-    if (enrolled.length === 0) {
-      return allCourses || [];
+    // Jika sudah login dan course target
+    // sudah diambil, gunakan data enrolled.
+    const enrolledTarget = (enrolledCourses || []).find(
+      (course) => course?.courseTitle?.trim().toLowerCase() === targetTitle,
+    );
+
+    if (enrolledTarget) {
+      return [enrolledTarget];
     }
 
+    // Sebelum login atau belum mengambil course:
+    // hanya tampilkan course target dari allCourses.
     const targetCourse = (allCourses || []).find(
-      (course) =>
-        course?.courseTitle?.trim().toLowerCase() ===
-        TARGET_COURSE_TITLE.toLowerCase(),
+      (course) => course?.courseTitle?.trim().toLowerCase() === targetTitle,
     );
 
-    if (!targetCourse) {
-      return enrolled;
-    }
-
-    const targetAlreadyEnrolled = enrolledCourseIds.has(
-      String(targetCourse._id),
-    );
-
-    if (targetAlreadyEnrolled) {
-      return enrolled;
-    }
-
-    return [...enrolled, targetCourse];
-  }, [allCourses, enrolledCourses, enrolledCourseIds]);
+    return targetCourse ? [targetCourse] : [];
+  }, [allCourses, enrolledCourses]);
 
   const handleTakeCourse = async (courseId) => {
     if (enrollingCourseId) {
@@ -640,32 +635,24 @@ const Home = () => {
   };
 
   const classes = useMemo(() => {
-  const q = search.trim().toLowerCase();
+    const q = search.trim().toLowerCase();
 
-  if (!q) return baseClasses;
+    if (!q) return baseClasses;
 
-  return baseClasses.filter((course) => {
-    const educatorNames = Array.isArray(
-      course?.pengajar
-    )
-      ? course.pengajar
-          .map((dosen) => dosen?.nama || "")
-          .join(" ")
-          .toLowerCase()
-      : (
-          course?.pengajar?.nama ||
-          course?.pengajarNama ||
-          ""
-        ).toLowerCase();
+    return baseClasses.filter((course) => {
+      const educatorNames = Array.isArray(course?.pengajar)
+        ? course.pengajar
+            .map((dosen) => dosen?.nama || "")
+            .join(" ")
+            .toLowerCase()
+        : (course?.pengajar?.nama || course?.pengajarNama || "").toLowerCase();
 
-    return (
-      (course?.courseTitle || "")
-        .toLowerCase()
-        .includes(q) ||
-      educatorNames.includes(q)
-    );
-  });
-}, [baseClasses, search]);
+      return (
+        (course?.courseTitle || "").toLowerCase().includes(q) ||
+        educatorNames.includes(q)
+      );
+    });
+  }, [baseClasses, search]);
 
   const displayName = userData?.namaKeprajaan || userData?.name || "Praja";
 

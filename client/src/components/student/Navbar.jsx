@@ -177,9 +177,9 @@ const DAYS_ID = [
   "Sabtu",
   "Minggu",
 ];
-const SEMESTER_START = new Date(2026, 5, 22); // samakan dengan Home.jsx
+const SEMESTER_START = new Date(2026, 7, 3); // samakan dengan Home.jsx
 const WEEKS_BEFORE_BREAK = 8;
-const BREAK_WEEKS = 4;
+const BREAK_WEEKS = 1;
 const WEEKS_AFTER_BREAK = 7;
 const MS_DAY = 86400000;
 const _mid = (y, m, d) => new Date(y, m, d).getTime();
@@ -540,9 +540,9 @@ const Navbar = () => {
   // Item navigasi utama (ala Edlink)
   const navItems = [
     { label: "Beranda", icon: Ico.home, to: "/" },
-    { label: "Timeline & Berita", icon: Ico.news, to: "/timeline" },
-    { label: "Obrolan", icon: Ico.chat, to: "/", soon: true },
-    { label: "Jelajah", icon: Ico.compass, to: "/course-list" },
+    // { label: "Timeline & Berita", icon: Ico.news, to: "/timeline" },
+    // { label: "Obrolan", icon: Ico.chat, to: "/", soon: true },
+    // { label: "Jelajah", icon: Ico.compass, to: "/course-list" },
   ];
 
   const isActive = (item) => {

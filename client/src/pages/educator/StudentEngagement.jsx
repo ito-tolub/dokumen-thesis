@@ -275,11 +275,11 @@ const StudentEngagement = () => {
               <th className="px-4 py-3 text-center">
                 Interaksi
                 <span className="block text-gray-400 font-normal normal-case tracking-normal">
-                  Bobot 30% · durasi Baca
+                  Bobot 30%<br/>Durasi Baca Materi
                 </span>
               </th>
               <th className="px-4 py-3 text-center">
-                Feedback
+                Penyelesaian Materi
                 <span className="block text-gray-400 font-normal normal-case tracking-normal">
                   Bobot 30%
                 </span>
@@ -344,7 +344,7 @@ const StudentEngagement = () => {
                         {s.feedback}%
                       </td>
                       <td className="px-4 py-3 text-center text-gray-600">
-                        100%
+                        -
                       </td>
                       <td className="px-4 py-3 text-center text-gray-500 font-mono text-xs">
                         {fmtDur(s.totalDurasiDetik)}
@@ -389,7 +389,7 @@ const StudentEngagement = () => {
                                     Selesai
                                   </th>
                                   <th className="text-left pb-2 px-4 w-48">
-                                    Durasi Baca
+                                    Durasi Baca Materi
                                   </th>
                                   <th className="text-center pb-2 px-4">
                                     % Durasi
@@ -482,11 +482,10 @@ const StudentEngagement = () => {
       {/* Keterangan formula */}
       <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100 text-xs text-blue-700">
         <p className="font-semibold mb-1">Formula SES:</p>
-        <p>SES = (Interaksi × 30%) + (Feedback × 30%) + (Presensi × 40%)</p>
+        <p>SES = (Interaksi × 30%) + (Penyelesaian Materi × 30%) + (Presensi × 40%)</p>
         <p className="mt-1 text-blue-500">
           Interaksi = durasi baca aktual ÷ total durasi objek pembelajaran &nbsp;|&nbsp;
-          Feedback = objek pembelajaran yang ditandai selesai &nbsp;|&nbsp; Presensi = 100%
-          (diasumsikan hadir)
+          Feedback = objek pembelajaran yang ditandai selesai &nbsp;|&nbsp; Presensi = Kehadiran yang dicatat oleh dosen
         </p>
       </div>
     </div>

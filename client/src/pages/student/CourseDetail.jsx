@@ -3,6 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { AppContext } from "../../context/AppContext";
 import { useAuth } from "@clerk/clerk-react";
+import { toast } from "react-toastify";
+
 const Ico = ({ name, size = 16, className = "", style = {} }) => (
   <i
     className={`ti ti-${name} ${className}`}
@@ -12,32 +14,11 @@ const Ico = ({ name, size = 16, className = "", style = {} }) => (
 );
 
 const MENU_ITEMS = [
-  "Informasi Kelas",
-  "Diskusi",
   "Sesi Pembelajaran",
   "Tugas",
-  "Ujian CBT",
   "Kuis",
   "Pengajar & Peserta",
   "Kelompok",
-];
-
-// ⚠️ Data contoh — belum ada di skema. Ganti dengan realCourse.tugas saat field-nya dibuat.
-const DEMO_TUGAS = [
-  {
-    title: "Ujian Akhir Semester UAS",
-    status: "Closed",
-    sesi: 16,
-    deadline: "2025-12-13T23:59",
-    submitted: true,
-  },
-  {
-    title: "Tugas Mandiri I - Analisis Proyek TI di Pemerintahan",
-    status: "Closed",
-    sesi: 2,
-    deadline: "2025-10-05T23:59",
-    submitted: true,
-  },
 ];
 
 const fmtTanggalJam = (val) => {
@@ -47,43 +28,308 @@ const fmtTanggalJam = (val) => {
   return `${fmtTanggal(d)}, ${jam}`; // fmtTanggal sudah didefinisikan utk sesi
 };
 
-const TugasCard = ({ t }) => (
-  <article className="cd-tugas-card">
-    <h3 className="cd-tugas-title">
-      {t.title}
-      <span
-        className={`cd-tugas-badge ${t.status === "Closed" ? "closed" : "open"}`}
-      >
-        {t.status}
-      </span>
-    </h3>
-    <p className="cd-tugas-sesi">Sesi ke {t.sesi}</p>
-    <div className="cd-tugas-foot">
-      <div>
-        <p className="cd-tugas-label">Batas waktu penyerahan</p>
-        <p className="cd-tugas-deadline">{fmtTanggalJam(t.deadline)}</p>
+const TugasCard = ({ t, onSubmit, submitting }) => {
+  const [file, setFile] = useState(null);
+
+  const deadline = t.deadline ? new Date(t.deadline) : null;
+
+  const isClosed =
+    deadline && !Number.isNaN(deadline.getTime()) && deadline < new Date();
+
+  const handleUpload = () => {
+    if (!file) return;
+
+    onSubmit(t._id, file);
+  };
+
+  return (
+    <article className="cd-tugas-card">
+      <h3 className="cd-tugas-title">
+        {t.title}
+
+        <span className={`cd-tugas-badge ${isClosed ? "closed" : "open"}`}>
+          {isClosed ? "Closed" : "Open"}
+        </span>
+      </h3>
+
+      <p className="cd-tugas-sesi">Pertemuan {t.pertemuan}</p>
+
+      {t.description && (
+        <p
+          style={{
+            marginTop: 12,
+            fontSize: 14,
+            lineHeight: 1.6,
+            color: "#616782",
+          }}
+        >
+          {t.description}
+        </p>
+      )}
+
+      {t.deadline && (
+        <div
+          style={{
+            marginTop: 18,
+          }}
+        >
+          <p className="cd-tugas-label">Batas waktu penyerahan</p>
+
+          <p className="cd-tugas-deadline">{fmtTanggalJam(t.deadline)}</p>
+        </div>
+      )}
+
+      {/* LAMPIRAN DOSEN */}
+
+      {t.attachmentUrl && (
+        <div
+          style={{
+            marginTop: 15,
+          }}
+        >
+          <a
+            href={t.attachmentUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#2563eb",
+            }}
+          >
+            📎 {t.attachmentName || "Unduh lampiran tugas"}
+          </a>
+        </div>
+      )}
+
+      {/* STATUS SUDAH DIKUMPULKAN */}
+
+      {t.submitted && (
+        <div
+          style={{
+            marginTop: 18,
+            padding: 14,
+            borderRadius: 9,
+            background: "#ecfdf5",
+            border: "1px solid #bbf7d0",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              color: "#15803d",
+              fontWeight: 700,
+              fontSize: 13,
+            }}
+          >
+            ✓ Sudah Dikumpulkan
+          </p>
+
+          <p
+            style={{
+              margin: "5px 0 0",
+              fontSize: 12,
+              color: "#64748b",
+            }}
+          >
+            {t.submission?.fileName}
+          </p>
+
+          {t.submission?.submittedAt && (
+            <p
+              style={{
+                margin: "4px 0 0",
+                fontSize: 12,
+                color: "#94a3b8",
+              }}
+            >
+              Dikumpulkan: {fmtTanggalJam(t.submission.submittedAt)}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* UPLOAD JAWABAN */}
+
+      {!isClosed && (
+        <div
+          style={{
+            marginTop: 18,
+            paddingTop: 18,
+            borderTop: "1px solid #eef0f7",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: "#26355d",
+              marginBottom: 10,
+            }}
+          >
+            {t.submitted ? "Ganti file jawaban" : "Upload jawaban tugas"}
+          </p>
+
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.jpg,.jpeg,.png"
+            disabled={submitting}
+            onChange={(event) => {
+              const selectedFile = event.target.files?.[0] || null;
+
+              setFile(selectedFile);
+            }}
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              border: "1px solid #d1d5db",
+              borderRadius: 8,
+              background: "#fff",
+              color: "#64748b",
+              fontSize: 13,
+              cursor: submitting ? "not-allowed" : "pointer",
+              transition: "all .15s ease",
+            }}
+            onMouseEnter={(event) => {
+              if (!submitting) {
+                event.currentTarget.style.borderColor = "#16a34a";
+
+                event.currentTarget.style.background = "#f9fdf9";
+              }
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.borderColor = "#d1d5db";
+
+              event.currentTarget.style.background = "#fff";
+            }}
+          />
+
+          <p
+            style={{
+              marginTop: 7,
+              fontSize: 11,
+              color: "#94a3b8",
+            }}
+          >
+            Maksimal 10 MB.
+          </p>
+
+          {file && (
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={handleUpload}
+              className="cd-tugas-btn"
+              style={{
+                marginTop: 12,
+              }}
+            >
+              {submitting
+                ? "Mengunggah..."
+                : t.submitted
+                  ? "Perbarui Jawaban"
+                  : "Kumpulkan Tugas"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {isClosed && !t.submitted && (
+        <div
+          style={{
+            marginTop: 18,
+            padding: 13,
+            borderRadius: 8,
+            background: "#fef2f2",
+            color: "#dc2626",
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          Pengumpulan tugas telah ditutup.
+        </div>
+      )}
+    </article>
+  );
+};
+
+const handleSubmitAssignment = async (assignmentId, file) => {
+  if (!file) {
+    return;
+  }
+
+  try {
+    setSubmittingAssignmentId(assignmentId);
+
+    const token = await getToken();
+
+    const formData = new FormData();
+
+    formData.append("file", file);
+
+    const { data } = await axios.post(
+      `${backendUrl}/api/assignment/${assignmentId}/submit`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    if (!data.success) {
+      alert(data.message || "Gagal mengumpulkan tugas");
+      return;
+    }
+
+    // Refresh daftar tugas
+    await fetchAssignments();
+  } catch (error) {
+    console.error(error);
+
+    alert(error.response?.data?.message || "Gagal mengumpulkan tugas");
+  } finally {
+    setSubmittingAssignmentId(null);
+  }
+};
+
+const TugasPanel = ({
+  items = [],
+  loading = false,
+  onSubmit,
+  submittingAssignmentId,
+}) => {
+  if (loading) {
+    return <div className="cd-side-card empty-task">Memuat tugas...</div>;
+  }
+
+  if (!items || items.length === 0) {
+    return (
+      <div className="cd-side-card empty-task">
+        Belum ada tugas untuk mata kuliah ini.
       </div>
-      <button
-        type="button"
-        className={`cd-tugas-btn ${t.submitted ? "" : "pending"}`}
-      >
-        {t.submitted ? "Sudah Dikumpulkan" : "Belum Dikumpulkan"}
-      </button>
-    </div>
-  </article>
-);
+    );
+  }
 
-const TugasPanel = ({ items = [] }) => (
-  <section className="cd-tugas-list">
-    {items.length === 0 ? (
-      <div className="cd-side-card empty-task">Belum ada tugas.</div>
-    ) : (
-      items.map((t, i) => <TugasCard key={i} t={t} />)
-    )}
-  </section>
-);
+  const sortedItems = [...items].sort(
+    (a, b) => Number(a.pertemuan || 0) - Number(b.pertemuan || 0),
+  );
 
-const SEMESTER_START = "2025-08-07"; // sesuaikan; dipakai untuk menurunkan tanggal tiap sesi
+  return (
+    <section className="cd-tugas-list">
+      {sortedItems.map((t) => (
+        <TugasCard
+          key={t._id}
+          t={t}
+          onSubmit={onSubmit}
+          submitting={submittingAssignmentId === t._id}
+        />
+      ))}
+    </section>
+  );
+};
+
+const SEMESTER_START = "2026-08-03";
 
 const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const BULAN = [
@@ -687,7 +933,6 @@ const KelompokPanel = () => (
 );
 
 const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
-  
   const { id } = useParams();
   const navigate = useNavigate();
   const { getToken } = useAuth();
@@ -728,6 +973,9 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
   const [loadingPeserta, setLoadingPeserta] = useState(true);
   const [quizzes, setQuizzes] = useState([]);
   const [loadingQuiz, setLoadingQuiz] = useState(false);
+  const [assignments, setAssignments] = useState([]);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  const [submittingAssignmentId, setSubmittingAssignmentId] = useState(null);
 
   useEffect(() => {
     if (!id || !backendUrl) return;
@@ -779,60 +1027,217 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
     fetchQuizzes();
   }, [id, backendUrl, getToken]);
 
+  // ==========================================
+  // FETCH TUGAS
+  // ==========================================
+
+  const fetchAssignments = async () => {
+    if (!id || !backendUrl) {
+      return false;
+    }
+
+    try {
+      setLoadingAssignments(true);
+
+      const token = await getToken();
+
+      const { data } = await axios.get(
+        `${backendUrl}/api/assignment/course/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (data.success) {
+        setAssignments(Array.isArray(data.assignments) ? data.assignments : []);
+
+        return true;
+      }
+
+      setAssignments([]);
+
+      return false;
+    } catch (error) {
+      console.error(
+        "Gagal mengambil tugas:",
+        error.response?.data || error.message,
+      );
+
+      setAssignments([]);
+
+      return false;
+    } finally {
+      setLoadingAssignments(false);
+    }
+  };
+
+  // ==========================================
+  // FETCH TUGAS SAAT COURSE DIBUKA
+  // ==========================================
+
+  useEffect(() => {
+    if (!id || !backendUrl) {
+      return;
+    }
+
+    fetchAssignments();
+  }, [id, backendUrl, getToken]);
+
+  // ==========================================
+  // PRAJA UPLOAD / GANTI JAWABAN TUGAS
+  // ==========================================
+
+  const handleSubmitAssignment = async (assignmentId, file) => {
+    if (!assignmentId || !file) {
+      toast.error("Pilih file jawaban terlebih dahulu.");
+
+      return false;
+    }
+
+    // Maksimal 10 MB
+    const maxFileSize = 10 * 1024 * 1024;
+
+    if (file.size > maxFileSize) {
+      toast.error("Ukuran file maksimal 10 MB.");
+
+      return false;
+    }
+
+    try {
+      setSubmittingAssignmentId(assignmentId);
+
+      const token = await getToken();
+
+      const formData = new FormData();
+
+      formData.append("file", file);
+
+      const { data } = await axios.post(
+        `${backendUrl}/api/assignment/${assignmentId}/submit`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (!data.success) {
+        toast.error(data.message || "Gagal mengumpulkan tugas.");
+
+        return false;
+      }
+
+      toast.success(data.message || "Tugas berhasil dikumpulkan.");
+
+      // ======================================
+      // REFRESH DATA TUGAS
+      // Agar status "Sudah Dikumpulkan"
+      // langsung muncul setelah upload.
+      // ======================================
+
+      await fetchAssignments();
+
+      return true;
+    } catch (error) {
+      console.error(
+        "Gagal mengumpulkan tugas:",
+        error.response?.data || error.message,
+      );
+
+      if (error.response?.data?.code === "ASSIGNMENT_CLOSED") {
+        toast.error("Batas waktu pengumpulan tugas telah berakhir.");
+      } else {
+        toast.error(
+          error.response?.data?.message || "Gagal mengumpulkan tugas.",
+        );
+      }
+
+      return false;
+    } finally {
+      setSubmittingAssignmentId(null);
+    }
+  };
+
   const QuizPanel = ({ quizzes, loading, onOpen }) => {
-  if (loading) {
-    return (
-      <div className="cd-side-card empty-task">
-        Memuat kuis...
-      </div>
-    );
-  }
+    if (loading) {
+      return <div className="cd-side-card empty-task">Memuat kuis...</div>;
+    }
 
-  if (!quizzes || quizzes.length === 0) {
-    return (
-      <div className="cd-side-card empty-task">
-        Belum ada kuis untuk mata kuliah ini.
-      </div>
-    );
-  }
-
-  return (
-    <section className="space-y-4">
-      {quizzes.map((quiz) => (
-        <div
-          key={quiz._id}
-          className="bg-white border rounded-lg p-5"
-        >
-          <p className="text-sm text-gray-500">
-            Pertemuan {quiz.pertemuan}
-          </p>
-
-          <h3 className="font-semibold text-lg">
-            {quiz.title}
-          </h3>
-
-          <p className="text-sm text-gray-500 mt-1">
-            {quiz.questionCount} soal • {quiz.duration} menit
-          </p>
-
-          {quiz.completed ? (
-            <div className="mt-4">
-              <strong>Nilai: {quiz.score}</strong>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onOpen(quiz._id)}
-              className="mt-4 px-4 py-2 bg-green-600 text-white rounded"
-            >
-              Mulai Kuis
-            </button>
-          )}
+    if (!quizzes || quizzes.length === 0) {
+      return (
+        <div className="cd-side-card empty-task">
+          Belum ada kuis untuk mata kuliah ini.
         </div>
-      ))}
-    </section>
-  );
-};
+      );
+    }
+
+    return (
+      <section className="space-y-4">
+        {quizzes.map((quiz) => (
+          <div key={quiz._id} className="bg-white border rounded-lg p-5">
+            <p className="text-sm text-gray-500">Pertemuan {quiz.pertemuan}</p>
+
+            <h3 className="font-semibold text-lg">{quiz.title}</h3>
+
+            <p className="text-sm text-gray-500 mt-1">
+              {quiz.questionCount} soal • {quiz.duration} menit
+            </p>
+
+            {quiz.completed ? (
+              <div className="mt-4 rounded-lg bg-green-50 border border-green-200 p-4">
+                <p className="text-sm font-semibold text-green-700">
+                  ✓ Kuis sudah dikerjakan
+                </p>
+
+                <p className="mt-1 text-sm text-gray-600">
+                  Nilai: <strong>{quiz.score}</strong>
+                </p>
+              </div>
+            ) : quiz.locked ? (
+              <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="font-semibold text-gray-700">🔒 Kuis Terkunci</p>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Selesaikan prasyarat berikut:
+                </p>
+
+                <ul className="mt-3 space-y-2 text-sm">
+                  {quiz.prerequisite?.reasons?.map((reason, index) => (
+                    <li
+                      key={index}
+                      className="flex items-start gap-2 text-gray-600"
+                    >
+                      <span className="text-red-500">✕</span>
+                      <span>{reason}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="mt-4">
+                <div className="mb-3 rounded-lg border border-green-200 bg-green-50 p-3">
+                  <p className="text-sm font-medium text-green-700">
+                    ✓ Prasyarat kuis telah terpenuhi
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onOpen(quiz._id)}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition"
+                >
+                  Mulai Kuis
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </section>
+    );
+  };
 
   const participantHasClassData = peserta.some((item) =>
     normalizeClassCode(item?.kelas),
@@ -1606,11 +2011,10 @@ const CourseDetail = ({ course, onBack = () => window.history.back() }) => {
 
           {activeMenu === "Tugas" && (
             <TugasPanel
-              items={
-                selectedCourse?.tugas?.length
-                  ? selectedCourse.tugas
-                  : DEMO_TUGAS
-              }
+              items={assignments}
+              loading={loadingAssignments}
+              onSubmit={handleSubmitAssignment}
+              submittingAssignmentId={submittingAssignmentId}
             />
           )}
 

@@ -111,7 +111,7 @@ const CourseList = () => {
         <div className="flex md:flex-row flex-col gap-6 items-start justify-between w-full">
           <div>
             <h1 className="text-4xl font-semibold text-gray-800">
-              Course List
+              Daftar Mata Kuliah
             </h1>
             <p className="text-gray-500">
               <span
@@ -120,7 +120,7 @@ const CourseList = () => {
               >
                 Home
               </span>{" "}
-              / <span>Course List</span>
+              / <span>Daftar Mata Kuliah</span>
             </p>
           </div>
           <SearchBar data={input} />
